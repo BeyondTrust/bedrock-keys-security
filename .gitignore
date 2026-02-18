@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# Credentials
+.aws/
+*.pem
+*.key
+.env
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Output
+*.csv
+*.log
+
+# Claude Code
+.claude/
+CLAUDE.md

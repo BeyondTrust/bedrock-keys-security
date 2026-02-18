@@ -1,0 +1,21 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "Enforce90DayMaxExpiry",
+      "Effect": "Deny",
+      "Action": [
+        "iam:CreateServiceSpecificCredential"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "iam:ServiceSpecificCredentialServiceName": "bedrock.amazonaws.com"
+        },
+        "NumericGreaterThan": {
+          "iam:ServiceSpecificCredentialAgeDays": "90"
+        }
+      }
+    }
+  ]
+}

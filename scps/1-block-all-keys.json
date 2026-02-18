@@ -1,0 +1,20 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Deny",
+      "Action": "iam:CreateServiceSpecificCredential",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "iam:ServiceSpecificCredentialServiceName": "bedrock.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Effect": "Deny",
+      "Action": "bedrock:CallWithBearerToken",
+      "Resource": "*"
+    }
+  ]
+}

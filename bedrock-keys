@@ -1,0 +1,1254 @@
+#!/usr/bin/env python3
+"""
+bedrock-keys - Bedrock API Keys Security Toolkit
+
+Comprehensive all-in-one tool for AWS Bedrock API key security:
+- Discovers phantom IAM users (BedrockAPIKey-*)
+- Identifies security risks (orphaned users, privilege escalation)
+- Automated cleanup of orphaned phantom users
+- Emergency incident response (key revocation, forensics)
+- CloudTrail timeline generation
+- Incident reporting
+- API key decoding and forensic analysis
+
+Author: BeyondTrust, Phantom Labs™
+License: MIT
+Version: 1.0.0
+"""
+
+import boto3
+import argparse
+import json
+import csv
+import sys
+import base64
+import urllib.parse
+from datetime import datetime
+from tabulate import tabulate
+from typing import List, Dict, Optional
+from botocore.exceptions import ClientError, BotoCoreError, NoCredentialsError
+
+
+class Colors:
+    """ANSI color codes for terminal output"""
+    RED = '\033[0;31m'
+    GREEN = '\033[0;32m'
+    YELLOW = '\033[1;33m'
+    BLUE = '\033[0;34m'
+    MAGENTA = '\033[0;35m'
+    CYAN = '\033[0;36m'
+    WHITE = '\033[1;37m'
+    BOLD = '\033[1m'
+    RESET = '\033[0m'
+
+
+class BedrockKeyDecoder:
+    """Decoder for AWS Bedrock API keys"""
+
+    LONG_TERM_PREFIX = "ABSK"
+    SHORT_TERM_PREFIX = "bedrock-api-key-"
+
+    @staticmethod
+    def detect_key_type(key: str) -> Optional[str]:
+        """
+        Detect the type of Bedrock API key
+
+        Args:
+            key: The API key string
+
+        Returns:
+            'long-term', 'short-term', or None
+        """
+        if key.startswith(BedrockKeyDecoder.LONG_TERM_PREFIX):
+            return 'long-term'
+        elif key.startswith(BedrockKeyDecoder.SHORT_TERM_PREFIX):
+            return 'short-term'
+        else:
+            return None
+
+    @staticmethod
+    def decode_long_term_key(key: str) -> Dict:
+        """
+        Decode ABSK (long-term) Bedrock API key
+
+        Format: ABSK + base64(BedrockAPIKey-{id}-at-{account_id}:{secret})
+
+        Args:
+            key: The ABSK... key string
+
+        Returns:
+            Dictionary with decoded information
+        """
+        try:
+            # Remove ABSK prefix
+            encoded_part = key[len(BedrockKeyDecoder.LONG_TERM_PREFIX):]
+
+            # Base64 decode (add padding if needed)
+            encoded_part += '=' * (-len(encoded_part) % 4)
+            decoded_bytes = base64.b64decode(encoded_part)
+            decoded_str = decoded_bytes.decode('utf-8')
+
+            # Parse format: BedrockAPIKey-xxx-at-ACCOUNTID:secret
+            if '-at-' not in decoded_str:
+                return {
+                    'error': 'Invalid format: missing -at- separator',
+                    'decoded_string': decoded_str
+                }
+
+            parts = decoded_str.split('-at-')
+            username = parts[0]
+
+            if ':' not in parts[1]:
+                return {
+                    'error': 'Invalid format: missing : separator',
+                    'decoded_string': decoded_str
+                }
+
+            account_secret = parts[1].split(':', 1)
+            account_id = account_secret[0]
+            secret_preview = account_secret[1][:8] + '...' if len(account_secret[1]) > 8 else account_secret[1]
+
+            return {
+                'type': 'long-term',
+                'format': 'ABSK + base64(username-at-accountid:secret)',
+                'username': username,
+                'account_id': account_id,
+                'secret_preview': secret_preview,
+                'full_decoded': decoded_str,
+                'security_notes': [
+                    'AWS Account ID disclosed (enables reconnaissance)',
+                    'IAM username disclosed (enables targeted attacks)',
+                    'ABSK prefix enables automated secret scanning',
+                    'Credential persists until explicitly revoked'
+                ]
+            }
+
+        except Exception as e:
+            return {
+                'error': f'Decoding failed: {str(e)}',
+                'type': 'long-term'
+            }
+
+    @staticmethod
+    def decode_short_term_key(key: str) -> Dict:
+        """
+        Decode short-term Bedrock API key
+
+        Format: bedrock-api-key- + base64(presigned_url)
+
+        Args:
+            key: The bedrock-api-key-... string
+
+        Returns:
+            Dictionary with decoded information
+        """
+        try:
+            # Remove prefix
+            encoded_part = key[len(BedrockKeyDecoder.SHORT_TERM_PREFIX):]
+
+            # Base64 decode to get presigned URL
+            decoded_bytes = base64.b64decode(encoded_part)
+            decoded_url = decoded_bytes.decode('utf-8')
+
+            # Parse URL
+            parsed = urllib.parse.urlparse(decoded_url)
+            params = urllib.parse.parse_qs(parsed.query)
+
+            # Extract information
+            action = params.get('Action', ['Unknown'])[0]
+            expires = params.get('X-Amz-Expires', ['Unknown'])[0]
+            credential = params.get('X-Amz-Credential', ['Unknown'])[0]
+            date = params.get('X-Amz-Date', ['Unknown'])[0]
+
+            # Parse region from credential string (format: AccessKeyID/date/region/service/aws4_request)
+            region = 'Unknown'
+            cred_parts = credential.split('/')
+            if len(cred_parts) >= 3:
+                region = cred_parts[2]
+
+            # Extract account ID from security token
+            account_id = 'Unknown'
+            security_token = params.get('X-Amz-Security-Token', [''])[0]
+            if security_token:
+                try:
+                    # Security token is base64-encoded and contains the account ID
+                    token_decoded = base64.b64decode(security_token + '==').decode('utf-8', errors='ignore')
+                    # Look for 12-digit account ID pattern
+                    import re
+                    account_match = re.search(r'(\d{12})', token_decoded)
+                    if account_match:
+                        account_id = account_match.group(1)
+                except Exception:
+                    pass
+
+            return {
+                'type': 'short-term',
+                'format': 'bedrock-api-key- + base64(presigned_url)',
+                'presigned_url': decoded_url,
+                'action': action,
+                'region': region,
+                'account_id': account_id,
+                'expires_in_seconds': expires,
+                'date': date,
+                'credential_hint': credential[:30] + '...' if len(credential) > 30 else credential,
+                'security_notes': [
+                    'Temporary credential with time-limited validity',
+                    'Cannot be revoked (must wait for expiration)',
+                    'Presigned URL contains AWS credentials',
+                    f'Expires in {expires} seconds from creation'
+                ]
+            }
+
+        except Exception as e:
+            return {
+                'error': f'Decoding failed: {str(e)}',
+                'type': 'short-term'
+            }
+
+    @staticmethod
+    def decode_key(key: str) -> Dict:
+        """
+        Auto-detect and decode any Bedrock API key
+
+        Args:
+            key: The API key string
+
+        Returns:
+            Dictionary with decoded information
+        """
+        key_type = BedrockKeyDecoder.detect_key_type(key)
+
+        if key_type == 'long-term':
+            return BedrockKeyDecoder.decode_long_term_key(key)
+        elif key_type == 'short-term':
+            return BedrockKeyDecoder.decode_short_term_key(key)
+        else:
+            return {
+                'error': 'Unknown key format',
+                'expected_formats': [
+                    'ABSK... (long-term key)',
+                    'bedrock-api-key-... (short-term key)'
+                ]
+            }
+
+
+class PhantomUserHunter:
+    """
+    Scanner for BedrockAPIKey-* phantom IAM users
+    """
+
+    def __init__(self, profile: Optional[str] = None, region: Optional[str] = None, verbose: bool = False):
+        """
+        Initialize the hunter with AWS credentials
+
+        Args:
+            profile: AWS profile name (optional)
+            region: AWS region (optional)
+            verbose: Enable verbose output
+        """
+        self.verbose = verbose
+        self.region = region or 'us-east-1'
+
+        try:
+            session = boto3.Session(profile_name=profile, region_name=self.region)
+            self.iam = session.client('iam')
+            self.sts = session.client('sts')
+            self.cloudtrail = session.client('cloudtrail', region_name=self.region)
+
+            # Get account information
+            identity = self.sts.get_caller_identity()
+            self.account_id = identity['Account']
+            self.caller_arn = identity['Arn']
+
+            if self.verbose:
+                print(f"{Colors.CYAN}[INFO] Connected to AWS Account: {self.account_id}{Colors.RESET}")
+                print(f"{Colors.CYAN}[INFO] Caller Identity: {self.caller_arn}{Colors.RESET}")
+
+        except NoCredentialsError:
+            print(f"{Colors.RED}[ERROR] No AWS credentials found. Please configure AWS CLI or set environment variables.{Colors.RESET}")
+            sys.exit(1)
+        except ClientError as e:
+            print(f"{Colors.RED}[ERROR] Failed to initialize AWS session: {e}{Colors.RESET}")
+            sys.exit(1)
+
+    def find_phantom_users(self) -> List[Dict]:
+        """
+        Find all IAM users starting with 'BedrockAPIKey-'
+
+        Returns:
+            List of phantom user data dictionaries
+        """
+        if self.verbose:
+            print(f"{Colors.CYAN}[INFO] Scanning for phantom IAM users...{Colors.RESET}")
+
+        phantom_users = []
+
+        try:
+            paginator = self.iam.get_paginator('list_users')
+
+            for page in paginator.paginate():
+                for user in page['Users']:
+                    username = user['UserName']
+
+                    # Check if this is a phantom user
+                    if username.startswith('BedrockAPIKey-'):
+                        if self.verbose:
+                            print(f"{Colors.CYAN}[INFO] Found phantom user: {username}{Colors.RESET}")
+
+                        user_data = {
+                            'username': username,
+                            'user_id': user['UserId'],
+                            'arn': user['Arn'],
+                            'created': user['CreateDate'],
+                            'path': user['Path']
+                        }
+
+                        # Enrich with credential data
+                        user_data.update(self.check_credentials(username))
+                        user_data.update(self.check_access_keys(username))
+                        user_data.update(self.check_policies(username))
+
+                        # Categorize status
+                        user_data['status'] = self.categorize_status(user_data)
+
+                        phantom_users.append(user_data)
+
+            if self.verbose:
+                print(f"{Colors.GREEN}[SUCCESS] Found {len(phantom_users)} phantom users{Colors.RESET}")
+
+        except ClientError as e:
+            print(f"{Colors.RED}[ERROR] Failed to list IAM users: {e}{Colors.RESET}")
+            sys.exit(1)
+
+        return phantom_users
+
+    def check_credentials(self, username: str) -> Dict:
+        """
+        Check user's service-specific credentials (Bedrock API keys)
+
+        Args:
+            username: IAM username
+
+        Returns:
+            Dictionary with credential information
+        """
+        try:
+            response = self.iam.list_service_specific_credentials(
+                UserName=username,
+                ServiceName='bedrock.amazonaws.com'
+            )
+
+            credentials = response.get('ServiceSpecificCredentials', [])
+            active_creds = [c for c in credentials if c['Status'] == 'Active']
+
+            if self.verbose and active_creds:
+                print(f"{Colors.YELLOW}  [CRED] {username}: {len(active_creds)} active Bedrock API key(s){Colors.RESET}")
+
+            return {
+                'bedrock_credentials': len(credentials),
+                'active_bedrock_credentials': len(active_creds),
+                'credential_details': active_creds
+            }
+
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchEntity':
+                return {
+                    'bedrock_credentials': 0,
+                    'active_bedrock_credentials': 0,
+                    'credential_details': []
+                }
+            else:
+                print(f"{Colors.RED}[WARNING] Could not check credentials for {username}: {e}{Colors.RESET}")
+                return {
+                    'bedrock_credentials': 0,
+                    'active_bedrock_credentials': 0,
+                    'credential_details': []
+                }
+
+    def check_access_keys(self, username: str) -> Dict:
+        """
+        Check for IAM access keys (AKIA...) - HIGH RISK indicator
+
+        Args:
+            username: IAM username
+
+        Returns:
+            Dictionary with access key information
+        """
+        try:
+            response = self.iam.list_access_keys(UserName=username)
+            access_keys = response.get('AccessKeyMetadata', [])
+            active_keys = [k for k in access_keys if k['Status'] == 'Active']
+
+            if active_keys:
+                print(f"{Colors.RED}  [HIGH RISK] {username}: {len(active_keys)} IAM access key(s) found! (ESCALATION){Colors.RESET}")
+
+            return {
+                'access_keys': len(access_keys),
+                'active_access_keys': len(active_keys),
+                'access_key_ids': [k['AccessKeyId'] for k in active_keys]
+            }
+
+        except ClientError as e:
+            print(f"{Colors.RED}[WARNING] Could not check access keys for {username}: {e}{Colors.RESET}")
+            return {
+                'access_keys': 0,
+                'active_access_keys': 0,
+                'access_key_ids': []
+            }
+
+    def check_policies(self, username: str) -> Dict:
+        """
+        Check attached policies for the user
+
+        Args:
+            username: IAM username
+
+        Returns:
+            Dictionary with policy information
+        """
+        try:
+            # Get attached managed policies
+            attached = self.iam.list_attached_user_policies(UserName=username)
+            attached_policies = attached.get('AttachedPolicies', [])
+
+            # Get inline policies
+            inline = self.iam.list_user_policies(UserName=username)
+            inline_policies = inline.get('PolicyNames', [])
+
+            policy_names = [p['PolicyName'] for p in attached_policies] + inline_policies
+
+            if self.verbose and policy_names:
+                print(f"{Colors.CYAN}  [POLICY] {username}: {', '.join(policy_names)}{Colors.RESET}")
+
+            return {
+                'attached_policies': [p['PolicyName'] for p in attached_policies],
+                'inline_policies': inline_policies,
+                'total_policies': len(attached_policies) + len(inline_policies)
+            }
+
+        except ClientError as e:
+            print(f"{Colors.RED}[WARNING] Could not check policies for {username}: {e}{Colors.RESET}")
+            return {
+                'attached_policies': [],
+                'inline_policies': [],
+                'total_policies': 0
+            }
+
+    def categorize_status(self, user_data: Dict) -> str:
+        """
+        Categorize user status based on credentials and access keys
+
+        Args:
+            user_data: User data dictionary
+
+        Returns:
+            Status string: ACTIVE, ORPHANED, or ESCALATED
+        """
+        has_active_bedrock = user_data.get('active_bedrock_credentials', 0) > 0
+        has_access_keys = user_data.get('active_access_keys', 0) > 0
+
+        if has_access_keys:
+            return 'ESCALATED'
+        elif has_active_bedrock:
+            return 'ACTIVE'
+        else:
+            return 'ORPHANED'
+
+    def delete_phantom_user(self, username: str, dry_run: bool = False) -> bool:
+        """
+        Delete a phantom IAM user and all associated resources
+
+        Args:
+            username: IAM username to delete
+            dry_run: If True, only simulate deletion without actually deleting
+
+        Returns:
+            True if successful (or would be successful in dry-run), False otherwise
+        """
+        try:
+            if dry_run:
+                print(f"{Colors.YELLOW}[DRY-RUN] Would delete user: {username}{Colors.RESET}")
+
+                # Check what would be deleted
+                access_keys = self.iam.list_access_keys(UserName=username)['AccessKeyMetadata']
+                if access_keys:
+                    print(f"{Colors.YELLOW}  - Would delete {len(access_keys)} access key(s){Colors.RESET}")
+
+                service_creds = self.iam.list_service_specific_credentials(UserName=username)['ServiceSpecificCredentials']
+                if service_creds:
+                    print(f"{Colors.YELLOW}  - Would delete {len(service_creds)} Bedrock API key(s){Colors.RESET}")
+
+                attached = self.iam.list_attached_user_policies(UserName=username)['AttachedPolicies']
+                if attached:
+                    print(f"{Colors.YELLOW}  - Would detach {len(attached)} managed polic(y/ies){Colors.RESET}")
+
+                inline = self.iam.list_user_policies(UserName=username)['PolicyNames']
+                if inline:
+                    print(f"{Colors.YELLOW}  - Would delete {len(inline)} inline polic(y/ies){Colors.RESET}")
+
+                return True
+
+            # Actual deletion
+            if self.verbose:
+                print(f"{Colors.CYAN}[INFO] Deleting phantom user: {username}{Colors.RESET}")
+
+            # 1. Delete all access keys
+            access_keys = self.iam.list_access_keys(UserName=username)['AccessKeyMetadata']
+            for key in access_keys:
+                if self.verbose:
+                    print(f"{Colors.CYAN}  [DELETE] Access key: {key['AccessKeyId']}{Colors.RESET}")
+                self.iam.delete_access_key(UserName=username, AccessKeyId=key['AccessKeyId'])
+
+            # 2. Delete all service-specific credentials (Bedrock API keys)
+            service_creds = self.iam.list_service_specific_credentials(UserName=username)['ServiceSpecificCredentials']
+            for cred in service_creds:
+                if self.verbose:
+                    print(f"{Colors.CYAN}  [DELETE] Bedrock API key: {cred['ServiceSpecificCredentialId']}{Colors.RESET}")
+                self.iam.delete_service_specific_credential(
+                    UserName=username,
+                    ServiceSpecificCredentialId=cred['ServiceSpecificCredentialId']
+                )
+
+            # 3. Detach all managed policies
+            attached = self.iam.list_attached_user_policies(UserName=username)['AttachedPolicies']
+            for policy in attached:
+                if self.verbose:
+                    print(f"{Colors.CYAN}  [DETACH] Policy: {policy['PolicyName']}{Colors.RESET}")
+                self.iam.detach_user_policy(UserName=username, PolicyArn=policy['PolicyArn'])
+
+            # 4. Delete all inline policies
+            inline = self.iam.list_user_policies(UserName=username)['PolicyNames']
+            for policy_name in inline:
+                if self.verbose:
+                    print(f"{Colors.CYAN}  [DELETE] Inline policy: {policy_name}{Colors.RESET}")
+                self.iam.delete_user_policy(UserName=username, PolicyName=policy_name)
+
+            # 5. Delete the user
+            if self.verbose:
+                print(f"{Colors.CYAN}  [DELETE] IAM user: {username}{Colors.RESET}")
+            self.iam.delete_user(UserName=username)
+
+            print(f"{Colors.GREEN}[SUCCESS] Deleted phantom user: {username}{Colors.RESET}")
+            return True
+
+        except ClientError as e:
+            print(f"{Colors.RED}[ERROR] Failed to delete {username}: {e}{Colors.RESET}")
+            return False
+
+    def cleanup_orphaned_users(self, phantoms: List[Dict], dry_run: bool = False, force: bool = False) -> Dict:
+        """
+        Clean up orphaned phantom users (no active credentials)
+
+        Args:
+            phantoms: List of phantom user data
+            dry_run: If True, only simulate cleanup
+            force: If True, skip confirmation prompts
+
+        Returns:
+            Dictionary with cleanup statistics
+        """
+        orphaned_users = [u for u in phantoms if u['status'] == 'ORPHANED']
+
+        if not orphaned_users:
+            print(f"\n{Colors.GREEN}No orphaned phantom users found. Nothing to clean up.{Colors.RESET}\n")
+            return {'total': 0, 'deleted': 0, 'failed': 0}
+
+        print(f"\n{Colors.BOLD}Orphaned Phantom Users Found: {len(orphaned_users)}{Colors.RESET}")
+        print(f"{Colors.YELLOW}The following users have no active credentials and can be safely deleted:{Colors.RESET}\n")
+
+        for user in orphaned_users:
+            created_date = user['created'].strftime('%Y-%m-%d')
+            print(f"  • {user['username']} (created: {created_date})")
+
+        print()
+
+        # Safety check: Never delete ACTIVE or ESCALATED users
+        unsafe_users = [u for u in phantoms if u['status'] in ['ACTIVE', 'ESCALATED']]
+        if unsafe_users and not force:
+            print(f"{Colors.RED}[WARNING] Found {len(unsafe_users)} users with active credentials.{Colors.RESET}")
+            print(f"{Colors.RED}These will NOT be deleted for safety:{Colors.RESET}")
+            for user in unsafe_users:
+                print(f"  • {user['username']} ({user['status']})")
+            print()
+
+        # Confirmation prompt (unless forced or dry-run)
+        if not dry_run and not force:
+            response = input(f"{Colors.YELLOW}Delete {len(orphaned_users)} orphaned phantom user(s)? [y/N]: {Colors.RESET}")
+            if response.lower() not in ['y', 'yes']:
+                print(f"{Colors.CYAN}[INFO] Cleanup cancelled by user.{Colors.RESET}")
+                return {'total': len(orphaned_users), 'deleted': 0, 'failed': 0}
+
+        # Perform cleanup
+        stats = {'total': len(orphaned_users), 'deleted': 0, 'failed': 0}
+
+        print()
+        for user in orphaned_users:
+            success = self.delete_phantom_user(user['username'], dry_run=dry_run)
+            if success:
+                stats['deleted'] += 1
+            else:
+                stats['failed'] += 1
+
+        # Print summary
+        print(f"\n{Colors.BOLD}Cleanup Summary:{Colors.RESET}")
+        if dry_run:
+            print(f"  {Colors.YELLOW}Mode: DRY-RUN (simulation only){Colors.RESET}")
+        print(f"  Total orphaned users: {stats['total']}")
+        print(f"  {Colors.GREEN}Successfully deleted: {stats['deleted']}{Colors.RESET}")
+        if stats['failed'] > 0:
+            print(f"  {Colors.RED}Failed: {stats['failed']}{Colors.RESET}")
+        print()
+
+        return stats
+
+    def revoke_key(self, username: str, dry_run: bool = False) -> bool:
+        """
+        Emergency revocation of Bedrock API key
+
+        Args:
+            username: Phantom username (BedrockAPIKey-xxxx)
+            dry_run: If True, only simulate revocation
+
+        Returns:
+            True if successful, False otherwise
+        """
+        print(f"\n{Colors.RED}{Colors.BOLD}⚠️  EMERGENCY KEY REVOCATION{Colors.RESET}")
+        print(f"{Colors.YELLOW}Username: {username}{Colors.RESET}\n")
+
+        if dry_run:
+            print(f"{Colors.YELLOW}[DRY-RUN] Would revoke all Bedrock API keys for: {username}{Colors.RESET}")
+            return True
+
+        # Confirmation
+        response = input(f"{Colors.YELLOW}This will immediately revoke all Bedrock API keys. Continue? [yes/no]: {Colors.RESET}")
+        if response.lower() != 'yes':
+            print(f"{Colors.CYAN}[INFO] Revocation cancelled.{Colors.RESET}")
+            return False
+
+        try:
+            # Method 1: Apply inline deny policy (fastest)
+            print(f"{Colors.CYAN}[INFO] Applying inline deny policy...{Colors.RESET}")
+
+            policy_name = f"EmergencyRevocation-{int(datetime.utcnow().timestamp())}"
+            policy_document = {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Sid": "DenyBedrockAPIKeyUsage",
+                    "Effect": "Deny",
+                    "Action": "bedrock:*",
+                    "Resource": "*"
+                }]
+            }
+
+            self.iam.put_user_policy(
+                UserName=username,
+                PolicyName=policy_name,
+                PolicyDocument=json.dumps(policy_document)
+            )
+            print(f"{Colors.GREEN}[SUCCESS] Deny policy applied: {policy_name}{Colors.RESET}")
+
+            # Method 2: Delete service-specific credentials
+            print(f"{Colors.CYAN}[INFO] Deleting Bedrock API credentials...{Colors.RESET}")
+
+            creds = self.iam.list_service_specific_credentials(
+                UserName=username,
+                ServiceName='bedrock.amazonaws.com'
+            )['ServiceSpecificCredentials']
+
+            for cred in creds:
+                self.iam.delete_service_specific_credential(
+                    UserName=username,
+                    ServiceSpecificCredentialId=cred['ServiceSpecificCredentialId']
+                )
+                print(f"{Colors.GREEN}[SUCCESS] Deleted credential: {cred['ServiceSpecificCredentialId']}{Colors.RESET}")
+
+            if not creds:
+                print(f"{Colors.YELLOW}[INFO] No active credentials found{Colors.RESET}")
+
+            print(f"\n{Colors.GREEN}{Colors.BOLD}✓ Key revocation complete{Colors.RESET}")
+            print(f"{Colors.CYAN}[INFO] Verify with CloudTrail monitoring (should see Access Denied){Colors.RESET}\n")
+            return True
+
+        except ClientError as e:
+            print(f"{Colors.RED}[ERROR] Revocation failed: {e}{Colors.RESET}")
+            return False
+
+    def generate_timeline(self, username: str, days: int = 7) -> None:
+        """
+        Generate CloudTrail timeline for phantom user activity
+
+        Args:
+            username: Phantom username
+            days: Number of days to look back (default: 7)
+        """
+        from datetime import timedelta
+
+        print(f"\n{Colors.BOLD}CloudTrail Timeline Analysis{Colors.RESET}")
+        print(f"{Colors.CYAN}Username: {username}{Colors.RESET}")
+        print(f"{Colors.CYAN}Time range: Last {days} days{Colors.RESET}\n")
+
+        try:
+            # Calculate start time
+            start_time = datetime.utcnow() - timedelta(days=days)
+
+            print(f"{Colors.CYAN}[INFO] Querying CloudTrail (this may take a moment)...{Colors.RESET}\n")
+
+            # Query CloudTrail
+            response = self.cloudtrail.lookup_events(
+                LookupAttributes=[{
+                    'AttributeKey': 'Username',
+                    'AttributeValue': username
+                }],
+                StartTime=start_time,
+                MaxResults=50
+            )
+
+            events = response.get('Events', [])
+
+            if not events:
+                print(f"{Colors.YELLOW}No CloudTrail events found for {username}{Colors.RESET}\n")
+                return
+
+            # Display events
+            print(f"{Colors.BOLD}Found {len(events)} event(s):{Colors.RESET}\n")
+
+            for event in events:
+                event_data = json.loads(event['CloudTrailEvent'])
+                event_time = event['EventTime'].strftime('%Y-%m-%d %H:%M:%S UTC')
+                event_name = event['EventName']
+                event_source = event_data.get('eventSource', 'unknown')
+                source_ip = event_data.get('sourceIPAddress', 'unknown')
+                error_code = event_data.get('errorCode', '')
+
+                # Color code by risk
+                if error_code:
+                    color = Colors.RED
+                elif 'Delete' in event_name or 'Create' in event_name:
+                    color = Colors.YELLOW
+                else:
+                    color = Colors.CYAN
+
+                print(f"{color}{event_time} | {event_name:40} | {event_source:30} | IP: {source_ip}{Colors.RESET}")
+                if error_code:
+                    print(f"  {Colors.RED}  └─ Error: {error_code}{Colors.RESET}")
+
+            print(f"\n{Colors.GREEN}[SUCCESS] Timeline generation complete{Colors.RESET}")
+            print(f"{Colors.CYAN}[INFO] Review events above for suspicious activity{Colors.RESET}\n")
+
+        except ClientError as e:
+            print(f"{Colors.RED}[ERROR] Failed to query CloudTrail: {e}{Colors.RESET}\n")
+
+    def generate_incident_report(self, username: str, output_file: Optional[str] = None) -> str:
+        """
+        Generate comprehensive incident report for phantom user
+
+        Args:
+            username: Phantom username
+            output_file: Optional file path to save report
+
+        Returns:
+            Report content as string
+        """
+        from datetime import datetime as dt
+
+        report_lines = []
+
+        # Header
+        report_lines.append("═" * 80)
+        report_lines.append("  AWS BEDROCK API KEY INCIDENT REPORT")
+        report_lines.append("═" * 80)
+        report_lines.append("")
+        report_lines.append(f"Generated: {dt.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        report_lines.append(f"Username: {username}")
+        report_lines.append(f"Account ID: {self.account_id}")
+        report_lines.append("")
+
+        try:
+            # User details
+            report_lines.append("PHANTOM USER DETAILS")
+            report_lines.append("─" * 80)
+            user = self.iam.get_user(UserName=username)['User']
+            report_lines.append(f"User ID: {user['UserId']}")
+            report_lines.append(f"ARN: {user['Arn']}")
+            report_lines.append(f"Created: {user['CreateDate'].strftime('%Y-%m-%d %H:%M:%S UTC')}")
+            report_lines.append("")
+
+            # Bedrock credentials
+            report_lines.append("BEDROCK API CREDENTIALS")
+            report_lines.append("─" * 80)
+            creds = self.iam.list_service_specific_credentials(
+                UserName=username,
+                ServiceName='bedrock.amazonaws.com'
+            )['ServiceSpecificCredentials']
+
+            if creds:
+                for cred in creds:
+                    report_lines.append(f"  ID: {cred['ServiceSpecificCredentialId']}")
+                    report_lines.append(f"  Status: {cred['Status']}")
+                    report_lines.append(f"  Created: {cred['CreateDate'].strftime('%Y-%m-%d %H:%M:%S UTC')}")
+                    report_lines.append("")
+            else:
+                report_lines.append("  No credentials found")
+                report_lines.append("")
+
+            # Access keys (escalation check)
+            report_lines.append("IAM ACCESS KEYS (ESCALATION CHECK)")
+            report_lines.append("─" * 80)
+            access_keys = self.iam.list_access_keys(UserName=username)['AccessKeyMetadata']
+
+            if access_keys:
+                report_lines.append(f"  ⚠️  WARNING: {len(access_keys)} IAM access key(s) found!")
+                for key in access_keys:
+                    report_lines.append(f"    Key ID: {key['AccessKeyId']}")
+                    report_lines.append(f"    Status: {key['Status']}")
+                    report_lines.append(f"    Created: {key['CreateDate'].strftime('%Y-%m-%d %H:%M:%S UTC')}")
+                report_lines.append("")
+            else:
+                report_lines.append("  No access keys found")
+                report_lines.append("")
+
+            # Policies
+            report_lines.append("ATTACHED POLICIES")
+            report_lines.append("─" * 80)
+            attached = self.iam.list_attached_user_policies(UserName=username)['AttachedPolicies']
+            inline = self.iam.list_user_policies(UserName=username)['PolicyNames']
+
+            if attached:
+                report_lines.append("  Managed Policies:")
+                for policy in attached:
+                    report_lines.append(f"    - {policy['PolicyName']} ({policy['PolicyArn']})")
+            if inline:
+                report_lines.append("  Inline Policies:")
+                for policy_name in inline:
+                    report_lines.append(f"    - {policy_name}")
+            if not attached and not inline:
+                report_lines.append("  No policies attached")
+            report_lines.append("")
+
+        except ClientError as e:
+            report_lines.append(f"ERROR: {e}")
+            report_lines.append("")
+
+        report_lines.append("═" * 80)
+
+        report_content = '\n'.join(report_lines)
+
+        # Save to file if requested
+        if output_file:
+            try:
+                with open(output_file, 'w') as f:
+                    f.write(report_content)
+                print(f"{Colors.GREEN}[SUCCESS] Report saved to: {output_file}{Colors.RESET}")
+            except IOError as e:
+                print(f"{Colors.RED}[ERROR] Failed to save report: {e}{Colors.RESET}")
+        else:
+            print(report_content)
+
+        return report_content
+
+    def generate_table_report(self, phantoms: List[Dict]) -> str:
+        """
+        Generate formatted table report
+
+        Args:
+            phantoms: List of phantom user data
+
+        Returns:
+            Formatted table string
+        """
+        if not phantoms:
+            return f"\n{Colors.GREEN}No phantom users found in this account.{Colors.RESET}\n"
+
+        # Prepare table data
+        table_data = []
+        for user in phantoms:
+            created_date = user['created'].strftime('%Y-%m-%d')
+            status = user['status']
+
+            # Color code status
+            if status == 'ESCALATED':
+                status_display = f"{Colors.RED}{status}!{Colors.RESET}"
+            elif status == 'ACTIVE':
+                status_display = f"{Colors.GREEN}{status}{Colors.RESET}"
+            else:
+                status_display = f"{Colors.YELLOW}{status}{Colors.RESET}"
+
+            table_data.append([
+                user['username'],
+                created_date,
+                user['active_bedrock_credentials'],
+                user['active_access_keys'],
+                status_display
+            ])
+
+        # Generate summary
+        total = len(phantoms)
+        active = len([u for u in phantoms if u['status'] == 'ACTIVE'])
+        orphaned = len([u for u in phantoms if u['status'] == 'ORPHANED'])
+        escalated = len([u for u in phantoms if u['status'] == 'ESCALATED'])
+
+        # Build output
+        output = []
+        output.append(f"\n{Colors.BOLD}AWS Bedrock Phantom User Hunter v1.0{Colors.RESET}")
+        output.append(f"Scanning Account: {Colors.CYAN}{self.account_id}{Colors.RESET}")
+        output.append(f"Region: {self.region}\n")
+
+        # Table
+        headers = ['Username', 'Created', 'Active Keys', 'Access Keys', 'Status']
+        output.append(tabulate(table_data, headers=headers, tablefmt='grid'))
+
+        # Summary
+        output.append(f"\n{Colors.BOLD}Summary:{Colors.RESET}")
+        output.append(f"  Total phantom users: {Colors.CYAN}{total}{Colors.RESET}")
+        output.append(f"  Active: {Colors.GREEN}{active}{Colors.RESET}")
+        output.append(f"  Orphaned: {Colors.YELLOW}{orphaned}{Colors.RESET} (safe to cleanup)")
+        output.append(f"  Escalated: {Colors.RED}{escalated}{Colors.RESET} (HIGH RISK - IAM access keys!)")
+
+        # Recommendations
+        if escalated > 0:
+            output.append(f"\n{Colors.RED}{Colors.BOLD}⚠️  CRITICAL: ESCALATED users found!{Colors.RESET}")
+            output.append(f"{Colors.RED}These phantom users have IAM access keys created on them.{Colors.RESET}")
+            output.append(f"{Colors.RED}This indicates privilege escalation. Investigate immediately:{Colors.RESET}")
+            for user in phantoms:
+                if user['status'] == 'ESCALATED':
+                    output.append(f"{Colors.RED}    - {user['username']} ({user['active_access_keys']} access keys){Colors.RESET}")
+            output.append("")
+
+        if orphaned > 0:
+            output.append(f"\n{Colors.YELLOW}ℹ️  {orphaned} orphaned phantom users can be cleaned up.{Colors.RESET}")
+            output.append(f"{Colors.YELLOW}These users have no active credentials and can be safely deleted.{Colors.RESET}")
+            output.append("")
+
+        return '\n'.join(output)
+
+    def generate_json_report(self, phantoms: List[Dict]) -> str:
+        """
+        Generate JSON report
+
+        Args:
+            phantoms: List of phantom user data
+
+        Returns:
+            JSON string
+        """
+        # Convert datetime objects to strings
+        for user in phantoms:
+            if isinstance(user.get('created'), datetime):
+                user['created'] = user['created'].isoformat()
+
+            # Convert credential details timestamps
+            for cred in user.get('credential_details', []):
+                if isinstance(cred.get('CreateDate'), datetime):
+                    cred['CreateDate'] = cred['CreateDate'].isoformat()
+
+        report = {
+            'scan_metadata': {
+                'account_id': self.account_id,
+                'region': self.region,
+                'scan_time': datetime.utcnow().isoformat(),
+                'caller_arn': self.caller_arn
+            },
+            'summary': {
+                'total': len(phantoms),
+                'active': len([u for u in phantoms if u['status'] == 'ACTIVE']),
+                'orphaned': len([u for u in phantoms if u['status'] == 'ORPHANED']),
+                'escalated': len([u for u in phantoms if u['status'] == 'ESCALATED'])
+            },
+            'phantom_users': phantoms
+        }
+
+        return json.dumps(report, indent=2)
+
+    def generate_csv_report(self, phantoms: List[Dict], output_file: str):
+        """
+        Generate CSV report and save to file
+
+        Args:
+            phantoms: List of phantom user data
+            output_file: Output CSV file path
+        """
+        if not phantoms:
+            print(f"{Colors.YELLOW}No phantom users to export.{Colors.RESET}")
+            return
+
+        fieldnames = [
+            'username', 'user_id', 'created', 'status',
+            'active_bedrock_credentials', 'bedrock_credentials',
+            'active_access_keys', 'access_keys',
+            'access_key_ids', 'attached_policies', 'inline_policies'
+        ]
+
+        try:
+            with open(output_file, 'w', newline='') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames, extrasaction='ignore')
+                writer.writeheader()
+
+                for user in phantoms:
+                    # Flatten lists to strings
+                    row = user.copy()
+                    row['created'] = user['created'].isoformat() if isinstance(user['created'], datetime) else user['created']
+                    row['access_key_ids'] = ','.join(user.get('access_key_ids', []))
+                    row['attached_policies'] = ','.join(user.get('attached_policies', []))
+                    row['inline_policies'] = ','.join(user.get('inline_policies', []))
+
+                    writer.writerow(row)
+
+            print(f"{Colors.GREEN}[SUCCESS] CSV report saved to: {output_file}{Colors.RESET}")
+
+        except IOError as e:
+            print(f"{Colors.RED}[ERROR] Failed to write CSV file: {e}{Colors.RESET}")
+            sys.exit(1)
+
+
+def format_decode_table_output(result: Dict) -> str:
+    """
+    Format decoded key result as a pretty table
+
+    Args:
+        result: Decoded key dictionary
+
+    Returns:
+        Formatted string
+    """
+    if 'error' in result:
+        return f"\n{Colors.RED}[ERROR] {result['error']}{Colors.RESET}\n"
+
+    lines = []
+    lines.append(f"\n{Colors.BOLD}{'─' * 60}{Colors.RESET}")
+    lines.append(f"{Colors.BOLD}{Colors.CYAN}  Bedrock API Key Analysis{Colors.RESET}")
+    lines.append(f"{Colors.BOLD}{'─' * 60}{Colors.RESET}")
+
+    key_type = result.get('type', 'Unknown')
+    type_label = f"{Colors.GREEN}Long-term (ABSK){Colors.RESET}" if key_type == 'long-term' else f"{Colors.YELLOW}Short-term{Colors.RESET}"
+    lines.append(f"  Type: {type_label}")
+
+    if key_type == 'long-term':
+        lines.append(f"  IAM Username: {Colors.CYAN}{result.get('username', 'N/A')}{Colors.RESET}")
+        lines.append(f"  AWS Account ID: {Colors.CYAN}{result.get('account_id', 'N/A')}{Colors.RESET}")
+        lines.append(f"  Secret Preview: {result.get('secret_preview', 'N/A')}")
+        lines.append(f"  Format: {result.get('format', 'N/A')}")
+
+    elif key_type == 'short-term':
+        lines.append(f"  Action: {result.get('action', 'N/A')}")
+        lines.append(f"  Region: {Colors.CYAN}{result.get('region', 'N/A')}{Colors.RESET}")
+        lines.append(f"  AWS Account ID: {Colors.CYAN}{result.get('account_id', 'N/A')}{Colors.RESET}")
+        lines.append(f"  Expires In: {result.get('expires_in_seconds', 'N/A')} seconds")
+        lines.append(f"  Date: {result.get('date', 'N/A')}")
+        lines.append(f"  Format: {result.get('format', 'N/A')}")
+
+    # Security notes
+    if 'security_notes' in result and result['security_notes']:
+        lines.append(f"\n  {Colors.YELLOW}{Colors.BOLD}Security Notes:{Colors.RESET}")
+        for note in result['security_notes']:
+            lines.append(f"  {Colors.YELLOW}  • {note}{Colors.RESET}")
+
+    lines.append(f"{Colors.BOLD}{'─' * 60}{Colors.RESET}\n")
+
+    return '\n'.join(lines)
+
+
+def main():
+    """Main CLI entry point"""
+    parser = argparse.ArgumentParser(
+        description='Phantom User Hunter - Discovery, cleanup, incident response, and key decoding for AWS Bedrock API keys',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Discovery & Scanning
+  %(prog)s                                  # Scan with default profile
+  %(prog)s --profile production             # Use specific AWS profile
+  %(prog)s --region us-west-2               # Scan specific region
+  %(prog)s --json                           # Output as JSON
+  %(prog)s --csv phantom-users.csv          # Export to CSV
+  %(prog)s --verbose                        # Detailed output
+
+  # Cleanup
+  %(prog)s --cleanup --dry-run              # Preview orphaned user cleanup
+  %(prog)s --cleanup                        # Delete orphaned users (with confirmation)
+  %(prog)s --cleanup --force                # Delete without confirmation (DANGEROUS)
+
+  # Incident Response
+  %(prog)s --revoke-key BedrockAPIKey-xxxx  # Emergency key revocation
+  %(prog)s --timeline BedrockAPIKey-xxxx    # CloudTrail timeline (last 7 days)
+  %(prog)s --timeline BedrockAPIKey-xxxx --days 30  # Timeline for last 30 days
+  %(prog)s --report BedrockAPIKey-xxxx      # Generate incident report
+  %(prog)s --report BedrockAPIKey-xxxx --output report.txt  # Save report to file
+
+  # Key Decoding (Forensics)
+  %(prog)s --decode-key "ABSKQmVkcm9ja0FQSUtleS..."  # Decode long-term key
+  %(prog)s --decode-key "bedrock-api-key-YmVkcm..."  # Decode short-term key
+  %(prog)s --decode-key <key> --json                 # JSON output
+  %(prog)s --decode-key <key> --verbose              # Show full decoded strings
+
+Author: BeyondTrust, Phantom Labs™
+GitHub: https://github.com/BeyondTrust/bedrock-keys-security
+        """
+    )
+
+    parser.add_argument(
+        '--profile',
+        help='AWS profile name (default: uses AWS_PROFILE or default profile)',
+        default=None
+    )
+
+    parser.add_argument(
+        '--region',
+        help='AWS region (default: us-east-1)',
+        default='us-east-1'
+    )
+
+    parser.add_argument(
+        '--json',
+        action='store_true',
+        help='Output results as JSON'
+    )
+
+    parser.add_argument(
+        '--csv',
+        metavar='FILE',
+        help='Export results to CSV file'
+    )
+
+    parser.add_argument(
+        '--verbose',
+        '-v',
+        action='store_true',
+        help='Enable verbose output'
+    )
+
+    parser.add_argument(
+        '--cleanup',
+        action='store_true',
+        help='Delete orphaned phantom users (requires confirmation)'
+    )
+
+    parser.add_argument(
+        '--dry-run',
+        action='store_true',
+        help='Simulate cleanup without actually deleting (use with --cleanup)'
+    )
+
+    parser.add_argument(
+        '--force',
+        action='store_true',
+        help='Skip confirmation prompts (DANGEROUS - use with caution)'
+    )
+
+    parser.add_argument(
+        '--revoke-key',
+        metavar='USERNAME',
+        help='Emergency revocation of Bedrock API key (e.g., BedrockAPIKey-xxxx)'
+    )
+
+    parser.add_argument(
+        '--timeline',
+        metavar='USERNAME',
+        help='Generate CloudTrail timeline for phantom user activity'
+    )
+
+    parser.add_argument(
+        '--days',
+        type=int,
+        default=7,
+        help='Number of days to look back for timeline (default: 7)'
+    )
+
+    parser.add_argument(
+        '--report',
+        metavar='USERNAME',
+        help='Generate incident report for phantom user'
+    )
+
+    parser.add_argument(
+        '--output',
+        metavar='FILE',
+        help='Output file for report (use with --report)'
+    )
+
+    parser.add_argument(
+        '--decode-key',
+        metavar='KEY',
+        help='Decode Bedrock API key to extract embedded information (ABSK... or bedrock-api-key-...)'
+    )
+
+    parser.add_argument(
+        '--version',
+        action='version',
+        version='%(prog)s 1.0.0'
+    )
+
+    args = parser.parse_args()
+
+    # Handle decode mode (doesn't require AWS credentials)
+    if args.decode_key:
+        decoder = BedrockKeyDecoder()
+        result = decoder.decode_key(args.decode_key)
+
+        # Remove sensitive data if not verbose
+        if not args.verbose and 'full_decoded' in result:
+            del result['full_decoded']
+        if not args.verbose and 'presigned_url' in result:
+            del result['presigned_url']
+
+        # Output
+        if args.json:
+            print(json.dumps(result, indent=2))
+        else:
+            print(format_decode_table_output(result))
+
+        # Exit with error code if decoding failed
+        sys.exit(0 if 'error' not in result else 1)
+
+    # Initialize hunter
+    hunter = PhantomUserHunter(
+        profile=args.profile,
+        region=args.region,
+        verbose=args.verbose
+    )
+
+    # Handle incident response modes (don't require full scan)
+    if args.revoke_key:
+        success = hunter.revoke_key(args.revoke_key, dry_run=args.dry_run)
+        sys.exit(0 if success else 1)
+
+    if args.timeline:
+        hunter.generate_timeline(args.timeline, days=args.days)
+        sys.exit(0)
+
+    if args.report:
+        hunter.generate_incident_report(args.report, output_file=args.output)
+        sys.exit(0)
+
+    # Scan for phantom users (normal mode)
+    phantoms = hunter.find_phantom_users()
+
+    # Handle cleanup mode
+    if args.cleanup:
+        # Show summary first (unless JSON output)
+        if not args.json:
+            print(hunter.generate_table_report(phantoms))
+
+        # Perform cleanup
+        cleanup_stats = hunter.cleanup_orphaned_users(
+            phantoms,
+            dry_run=args.dry_run,
+            force=args.force
+        )
+
+        # Exit after cleanup (don't show duplicate output)
+        sys.exit(0 if cleanup_stats['failed'] == 0 else 1)
+
+    # Generate output (normal mode - no cleanup)
+    if args.json:
+        print(hunter.generate_json_report(phantoms))
+    elif args.csv:
+        # Also show table output
+        print(hunter.generate_table_report(phantoms))
+        hunter.generate_csv_report(phantoms, args.csv)
+    else:
+        print(hunter.generate_table_report(phantoms))
+
+
+if __name__ == '__main__':
+    main()

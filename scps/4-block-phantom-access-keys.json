@@ -1,0 +1,34 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "BlockPhantomUserAccessKeyCreation",
+      "Effect": "Deny",
+      "Action": [
+        "iam:CreateAccessKey"
+      ],
+      "Resource": "arn:aws:iam::*:user/BedrockAPIKey-*"
+    },
+    {
+      "Sid": "BlockPhantomUserConsoleAccess",
+      "Effect": "Deny",
+      "Action": [
+        "iam:CreateLoginProfile",
+        "iam:UpdateLoginProfile"
+      ],
+      "Resource": "arn:aws:iam::*:user/BedrockAPIKey-*"
+    },
+    {
+      "Sid": "BlockPhantomUserMFADevices",
+      "Effect": "Deny",
+      "Action": [
+        "iam:EnableMFADevice",
+        "iam:CreateVirtualMFADevice"
+      ],
+      "Resource": [
+        "arn:aws:iam::*:user/BedrockAPIKey-*",
+        "arn:aws:iam::*:mfa/BedrockAPIKey-*"
+      ]
+    }
+  ]
+}
