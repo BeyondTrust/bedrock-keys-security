@@ -106,23 +106,8 @@ What it does:
 - Export for tracking/reporting
 
 Example output:
-```
-Scanning Account: 886000970552
 
-┌──────────────────────┬───────────┬─────────────┬─────────────┬────────────┐
-│ Username             │ Created   │ Active Keys │ Access Keys │ Status     │
-├──────────────────────┼───────────┼─────────────┼─────────────┼────────────┤
-│ BedrockAPIKey-bzbk   │ 2026-02-04│ 1           │ 0           │ ACTIVE     │
-│ BedrockAPIKey-826f   │ 2025-12-10│ 0           │ 0           │ ORPHANED   │
-│ BedrockAPIKey-Og3f   │ 2025-11-15│ 0           │ 2           │ ESCALATED! │
-└──────────────────────┴───────────┴─────────────┴─────────────┴────────────┘
-
-Summary:
-  Total phantom users: 31
-  Active: 3
-  Orphaned: 26 (safe to cleanup)
-  Escalated: 2 (HIGH RISK - IAM access keys!)
-```
+![Scan Example](docs/images/scan-example.png)
 
 ### Incident Response
 
@@ -145,13 +130,11 @@ Decode leaked keys offline (no AWS creds needed).
 ./bedrock-keys --decode-key "bedrock-api-key-YmVkcm9ja..." --json
 ```
 
-Pulls out:
-- IAM username
-- AWS account ID
-- AWS region
-- Key format details
-
 Useful when you find these keys in GitHub/Pastebin/wherever and need to know whose account is compromised.
+
+![Long-term Key Decode](docs/images/long-term-key.png)
+
+![Short-term Key Decode](docs/images/short-term-key.png)
 
 ## Better Alternative: Don't Use API Keys
 
