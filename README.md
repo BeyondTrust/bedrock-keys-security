@@ -121,6 +121,8 @@ Emergency response when keys are compromised.
 ./bedrock-keys --report BedrockAPIKey-xxxx --output report.txt  # Save report to file
 ```
 
+![Revoke Key](docs/images/revoke-key.png)
+
 ### Key Decoding
 
 Decode leaked keys offline (no AWS creds needed).

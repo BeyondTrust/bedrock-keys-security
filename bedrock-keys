@@ -23,7 +23,7 @@ import csv
 import sys
 import base64
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timezone
 from tabulate import tabulate
 from typing import List, Dict, Optional
 from botocore.exceptions import ClientError, BotoCoreError, NoCredentialsError
@@ -630,7 +630,7 @@ class PhantomUserHunter:
             # Method 1: Apply inline deny policy (fastest)
             print(f"{Colors.CYAN}[INFO] Applying inline deny policy...{Colors.RESET}")
 
-            policy_name = f"EmergencyRevocation-{int(datetime.utcnow().timestamp())}"
+            policy_name = f"EmergencyRevocation-{int(datetime.now(timezone.utc).timestamp())}"
             policy_document = {
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -690,7 +690,7 @@ class PhantomUserHunter:
 
         try:
             # Calculate start time
-            start_time = datetime.utcnow() - timedelta(days=days)
+            start_time = datetime.now(timezone.utc) - timedelta(days=days)
 
             print(f"{Colors.CYAN}[INFO] Querying CloudTrail (this may take a moment)...{Colors.RESET}\n")
 
@@ -750,8 +750,6 @@ class PhantomUserHunter:
         Returns:
             Report content as string
         """
-        from datetime import datetime as dt
-
         report_lines = []
 
         # Header
@@ -759,7 +757,7 @@ class PhantomUserHunter:
         report_lines.append("  AWS BEDROCK API KEY INCIDENT REPORT")
         report_lines.append("═" * 80)
         report_lines.append("")
-        report_lines.append(f"Generated: {dt.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        report_lines.append(f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
         report_lines.append(f"Username: {username}")
         report_lines.append(f"Account ID: {self.account_id}")
         report_lines.append("")
@@ -946,7 +944,7 @@ class PhantomUserHunter:
             'scan_metadata': {
                 'account_id': self.account_id,
                 'region': self.region,
-                'scan_time': datetime.utcnow().isoformat(),
+                'scan_time': datetime.now(timezone.utc).isoformat(),
                 'caller_arn': self.caller_arn
             },
             'summary': {
