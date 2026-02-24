@@ -124,6 +124,18 @@ Summary:
   Escalated: 2 (HIGH RISK - IAM access keys!)
 ```
 
+### Incident Response
+
+Emergency response when keys are compromised.
+
+```bash
+./bedrock-keys --revoke-key BedrockAPIKey-xxxx              # Emergency key revocation
+./bedrock-keys --timeline BedrockAPIKey-xxxx                # CloudTrail timeline (last 7 days)
+./bedrock-keys --timeline BedrockAPIKey-xxxx --days 30      # Timeline for last 30 days
+./bedrock-keys --report BedrockAPIKey-xxxx                  # Generate incident report
+./bedrock-keys --report BedrockAPIKey-xxxx --output report.txt  # Save report to file
+```
+
 ### Key Decoding
 
 Decode leaked keys offline (no AWS creds needed).
@@ -236,8 +248,8 @@ This one's important - it blocks the privilege escalation path.
 - Criminal groups make $1M+/year running LLMjacking operations with leaked keys
 - AWS doesn't detect when phantom users get abused
 
-**Where to read more:**
-- Blog: [BeyondTrust - AWS Bedrock API Keys Security Research](https://beyondtrust.com/blog/bedrock-api-keys-security)
+<!-- **Where to read more:**
+- Blog: [BeyondTrust - AWS Bedrock API Keys Security Research](https://beyondtrust.com/blog/bedrock-api-keys-security) -->
 
 ## Contributing
 
