@@ -4,3 +4,20 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-gh-actions:
+        update-types:
+          - minor
+          - patch
+      major-gh-actions:
+        update-types:
+          - major
+    cooldown:
+      default-days: 14
+    commit-message:
+      prefix: "ci(deps)"
