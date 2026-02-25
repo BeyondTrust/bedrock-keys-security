@@ -1,6 +1,6 @@
 # Bedrock API Keys Security
 
-Security toolkit for AWS Bedrock API keys — discover phantom IAM users, decode leaked keys, automate cleanup, and enforce preventive controls.
+Security toolkit for AWS Bedrock API keys. Discover phantom IAM users, decode leaked keys, automate cleanup, and enforce preventive controls.
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -21,23 +21,23 @@ These phantom users are never automatically cleaned up. They accumulate over tim
 
 ![Attack Paths Diagram](docs/images/attack-paths.jpeg)
 
-**LLMjacking** — An attacker who obtains a leaked key can spin up workers across all AWS regions to consume foundation model capacity. Organizations have reported fraudulent charges exceeding $14,000/day per region.
+**LLMjacking:** An attacker who obtains a leaked key can spin up workers across all AWS regions to consume foundation model capacity. Organizations have reported fraudulent charges exceeding $14,000/day per region.
 
 ![LLMjacking Attack Flow](docs/images/llm-jacking.jpeg)
 
-**Privilege Escalation** — If an attacker creates an IAM access key on the phantom user, or if one already exists, they gain persistent IAM credentials (`AKIA...`) that extend well beyond Bedrock. From there, they can pivot to S3, Secrets Manager, and other services — even after the original Bedrock key expires.
+**Privilege Escalation:** If an attacker creates an IAM access key on the phantom user, or if one already exists, they gain persistent IAM credentials (`AKIA...`) that extend well beyond Bedrock. From there, they can pivot to S3, Secrets Manager, and other services, even after the original Bedrock key expires.
 
 ## Overview
 
 AWS Bedrock API keys ([launched July 2025](https://aws.amazon.com/blogs/machine-learning/accelerate-ai-development-with-amazon-bedrock-api-keys/)) introduce multiple security risks that organizations must understand before deployment. While designed to simplify authentication, they create permanent attack surfaces through phantom IAM user creation, overprivileged default policies, and bearer token authentication.
 
-Long-term keys automatically provision IAM users (`BedrockAPIKey-xxxx`) with admin-level Bedrock permissions that persist indefinitely — even after the key is deleted or expires. Within 14 days of launch, keys were already leaking to GitHub. Criminal organizations generate an estimated $1M/year in annualized revenue from stolen keys, with fraudulent charges reaching up to $14,000/day per region.
+Long-term keys automatically provision IAM users (`BedrockAPIKey-xxxx`) with admin-level Bedrock permissions that persist indefinitely, even after the key is deleted or expires. Within 14 days of launch, keys were already leaking to GitHub. Criminal organizations generate an estimated $1M/year in annualized revenue from stolen keys, with fraudulent charges reaching up to $14,000/day per region.
 
 This toolkit provides:
-- **Discovery** — Scan your account for phantom IAM users and categorize their risk
-- **Incident Response** — Emergency key revocation, CloudTrail timelines, and forensic reports
-- **Key Decoding** — Offline analysis of leaked keys to extract account and identity information
-- **Prevention** — Service Control Policies to block or restrict API key usage at the org level
+- **Discovery:** Scan your account for phantom IAM users and categorize their risk
+- **Incident Response:** Emergency key revocation, CloudTrail timelines, and forensic reports
+- **Key Decoding:** Offline analysis of leaked keys to extract account and identity information
+- **Prevention:** Service Control Policies to block or restrict API key usage at the org level
 
 ## Installation
 
@@ -81,11 +81,11 @@ bks scan --verbose            # detailed output
 ```
 
 Each phantom user is categorized by risk level:
-- **ACTIVE** — Has valid Bedrock API credentials
-- **ORPHANED** — No active credentials remaining (safe to delete)
-- **AT RISK** — Has IAM access keys that grant `bedrock:*`, recon permissions, and persist independently of the API key
+- **ACTIVE:** Has valid Bedrock API credentials
+- **ORPHANED:** No active credentials remaining (safe to delete)
+- **AT RISK:** Has IAM access keys that grant `bedrock:*`, recon permissions, and persist independently of the API key
 
-<img src="docs/images/scan-example.png" alt="Scan Example" width="700">
+<img src="docs/images/scan-example.png" alt="Scan Example" width="600">
 
 ### Cleanup
 
@@ -113,11 +113,11 @@ bks report BedrockAPIKey-xxxx --output report.txt
 
 The `revoke-key` command applies an inline deny policy and deletes all Bedrock credentials in a single operation.
 
-<img src="docs/images/revoke-key.png" alt="Revoke Key" width="700">
+<img src="docs/images/revoke-key.png" alt="Revoke Key" width="600">
 
 ### Key Decoding
 
-Decode leaked Bedrock API keys offline — no AWS credentials required:
+Decode leaked Bedrock API keys offline, no AWS credentials required:
 
 ```bash
 bks decode-key "ABSKQmVkcm9ja0FQSUtleS..."
@@ -136,7 +136,7 @@ Four SCPs are provided for organizational enforcement. Apply them to OUs via AWS
 
 ### 1. Block All API Keys (Recommended)
 
-The simplest approach — block creation and usage of all Bedrock API keys:
+The simplest approach: block creation and usage of all Bedrock API keys:
 
 ```bash
 aws organizations create-policy \
@@ -167,7 +167,7 @@ aws organizations create-policy \
 
 ### 4. Block Phantom Escalation
 
-Prevent IAM access key creation on phantom users — this blocks the privilege escalation path:
+Prevent IAM access key creation on phantom users. This blocks the privilege escalation path:
 
 ```bash
 aws organizations create-policy \
@@ -219,7 +219,7 @@ Standard GitHub workflow: fork, branch, commit, pull request.
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE).
+Apache 2.0. See [LICENSE](LICENSE).
 
 ## Contact
 
