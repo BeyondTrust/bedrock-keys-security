@@ -55,6 +55,12 @@ cd bedrock-keys-security
 pip install .
 ```
 
+Verify the installation:
+
+```bash
+bks --version
+```
+
 After installation, the `bks` command is available globally. Requires Python 3.10+ and AWS credentials. Minimum permissions by command:
 
 | Command | IAM Permissions Required |
