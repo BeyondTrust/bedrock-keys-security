@@ -41,10 +41,10 @@ This toolkit provides:
 
 ## Installation
 
-Install from GitHub:
+Install from PyPI:
 
 ```bash
-pip install git+https://github.com/BeyondTrust/bedrock-keys-security.git
+pip install bedrock-keys-security
 ```
 
 Or install from source:
