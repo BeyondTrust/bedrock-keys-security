@@ -217,6 +217,10 @@ API keys may still be necessary for legacy applications hardcoded for bearer tok
 <!-- **Further Reading:**
 - Blog: [BeyondTrust - AWS Bedrock API Keys Security Research](https://beyondtrust.com/blog/bedrock-api-keys-security) -->
 
+## Presentations
+
+- [The Phantom of the Infrastructure: Investigating the Hidden IAM Risks in Bedrock API Keys](docs/bsides-seattle-2026.pdf) - BSides Seattle 2026
+
 ## Contributing
 
 Contributions are welcome. Useful additions include IaC templates (Terraform/CloudFormation), additional attack scenarios, and GovCloud support.
