@@ -19,11 +19,11 @@ These phantom users are never automatically cleaned up. They accumulate over tim
 
 ### Attack Paths
 
-![Attack Paths Diagram](docs/images/attack-paths.jpeg)
+![Attack Paths Diagram](https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/attack-paths.jpeg)
 
 **LLMjacking:** An attacker who obtains a leaked key can spin up workers across all AWS regions to consume foundation model capacity. Organizations have reported fraudulent charges exceeding $14,000/day per region.
 
-![LLMjacking Attack Flow](docs/images/llm-jacking.jpeg)
+![LLMjacking Attack Flow](https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/llm-jacking.jpeg)
 
 **Privilege Escalation:** If an attacker creates an IAM access key on the phantom user, or if one already exists, they gain persistent IAM credentials (`AKIA...`) that extend well beyond Bedrock. From there, they can pivot to S3, Secrets Manager, and other services, even after the original Bedrock key expires.
 
@@ -91,7 +91,7 @@ Each phantom user is categorized by risk level:
 - **ORPHANED:** No active credentials remaining (safe to delete)
 - **AT RISK:** Has IAM access keys that grant `bedrock:*`, recon permissions, and persist independently of the API key
 
-<img src="docs/images/scan-example.png" alt="Scan Example" width="600">
+<img src="https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/scan-example.png" alt="Scan Example" width="600">
 
 ### Cleanup
 
@@ -119,7 +119,7 @@ bks report BedrockAPIKey-xxxx --output report.txt
 
 The `revoke-key` command applies an inline deny policy and deletes all Bedrock credentials in a single operation.
 
-<img src="docs/images/revoke-key.png" alt="Revoke Key" width="600">
+<img src="https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/revoke-key.png" alt="Revoke Key" width="600">
 
 ### Key Decoding
 
@@ -132,9 +132,9 @@ bks decode-key "bedrock-api-key-YmVkcm9ja..." --json
 
 Extracts the embedded IAM username, AWS account ID, region, and key format. Useful for triaging keys found on GitHub, Pastebin, or other public sources.
 
-![Long-term Key Decode](docs/images/long-term-key.png)
+![Long-term Key Decode](https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/long-term-key.png)
 
-![Short-term Key Decode](docs/images/short-term-key.png)
+![Short-term Key Decode](https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/short-term-key.png)
 
 ## Prevention with Service Control Policies
 
