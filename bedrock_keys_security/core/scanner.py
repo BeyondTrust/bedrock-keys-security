@@ -13,6 +13,13 @@ from bedrock_keys_security.utils import output
 from bedrock_keys_security.utils.aws import AWSSession
 
 
+def _json_default(obj):
+    """Fallback serializer for json.dumps — handles datetime fields returned by AWS APIs"""
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+
+
 class PhantomUserScanner:
     """
     Scanner for BedrockAPIKey-* phantom IAM users
@@ -297,16 +304,22 @@ class PhantomUserScanner:
 
         return stats
 
-    def revoke_key(self, username: str, dry_run: bool = False) -> bool:
-        """Emergency revocation of Bedrock API key"""
+    def revoke_key(self, username: str, dry_run: bool = False, force: bool = False) -> bool:
+        """Emergency revocation: deny Bedrock, delete service-specific creds, disable IAM access keys"""
         click.echo(f"\n{click.style('\u26a0\ufe0f  EMERGENCY KEY REVOCATION', fg='red', bold=True)}")
         click.echo(f"{output.yellow(f'Username: {username}')}\n")
 
         if dry_run:
-            click.echo(output.yellow(f"[DRY-RUN] Would revoke all Bedrock API keys for: {username}"))
+            click.echo(output.yellow(f"[DRY-RUN] Would revoke all Bedrock API keys and disable IAM access keys for: {username}"))
             return True
 
-        if not click.confirm(click.style("This will immediately revoke all Bedrock API keys. Continue?", fg="yellow"), default=False):
+        if not force and not click.confirm(
+            click.style(
+                "This will immediately deny Bedrock, delete API keys, and disable IAM access keys. Continue?",
+                fg="yellow",
+            ),
+            default=False,
+        ):
             output.info("Revocation cancelled.")
             return False
 
@@ -346,7 +359,24 @@ class PhantomUserScanner:
                 output.success(f"Deleted credential: {cred['ServiceSpecificCredentialId']}")
 
             if not creds:
-                output.info("No active credentials found")
+                output.info("No active Bedrock credentials found")
+
+            output.info("Disabling IAM access keys (AKIA*)...")
+            access_keys = self.iam.list_access_keys(UserName=username).get('AccessKeyMetadata', [])
+            disabled = 0
+            for key in access_keys:
+                if key['Status'] == 'Active':
+                    self.iam.update_access_key(
+                        UserName=username,
+                        AccessKeyId=key['AccessKeyId'],
+                        Status='Inactive',
+                    )
+                    output.success(f"Disabled access key: {key['AccessKeyId']}")
+                    disabled += 1
+            if not access_keys:
+                output.info("No IAM access keys found")
+            elif disabled == 0:
+                output.info("All access keys already inactive")
 
             click.echo(f"\n{click.style('\u2713 Key revocation complete', fg='green', bold=True)}")
             output.info("Verify with CloudTrail monitoring (should see Access Denied)\n")
@@ -581,14 +611,6 @@ class PhantomUserScanner:
 
     def generate_json_report(self, phantoms: List[Dict]) -> str:
         """Generate JSON report"""
-        for user in phantoms:
-            if isinstance(user.get('created'), datetime):
-                user['created'] = user['created'].isoformat()
-
-            for cred in user.get('credential_details', []):
-                if isinstance(cred.get('CreateDate'), datetime):
-                    cred['CreateDate'] = cred['CreateDate'].isoformat()
-
         report = {
             'scan_metadata': {
                 'account_id': self.account_id,
@@ -605,7 +627,7 @@ class PhantomUserScanner:
             'phantom_users': phantoms
         }
 
-        return json.dumps(report, indent=2)
+        return json.dumps(report, indent=2, default=_json_default)
 
     def generate_csv_report(self, phantoms: List[Dict], output_file: str):
         """Generate CSV report and save to file"""

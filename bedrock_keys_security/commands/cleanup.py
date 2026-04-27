@@ -4,26 +4,23 @@ import sys
 import click
 
 from bedrock_keys_security.utils import output
+from bedrock_keys_security.utils.cli import aws_options, apply_aws_overrides
 
 
 @click.command()
+@aws_options
 @click.option('--dry-run', is_flag=True, help='Simulate cleanup without deleting')
 @click.option('--force', is_flag=True, help='Skip confirmation prompts (DANGEROUS)')
-@click.option('--json', 'output_json', is_flag=True, help='Output results as JSON')
 @click.pass_context
-def cleanup(ctx, dry_run, force, output_json):
+def cleanup(ctx, profile, region, dry_run, force):
     """Delete orphaned phantom users"""
+    apply_aws_overrides(ctx, profile, region)
     scanner = ctx.obj.scanner
 
-    if not output_json:
-        click.echo(scanner.report_header())
-
-    if output_json:
+    click.echo(scanner.report_header())
+    with output.spinner():
         phantoms = scanner.find_phantom_users()
-    else:
-        with output.spinner():
-            phantoms = scanner.find_phantom_users()
-        click.echo(scanner.generate_table_report(phantoms))
+    click.echo(scanner.generate_table_report(phantoms))
 
     stats = scanner.cleanup_orphaned_users(phantoms, dry_run=dry_run, force=force)
     sys.exit(0 if stats['failed'] == 0 else 1)

@@ -84,7 +84,15 @@ def cyan(text: str) -> str:
 
 @contextmanager
 def spinner(label="Scanning"):
-    """Simple threaded spinner for indeterminate progress"""
+    """Simple threaded spinner for indeterminate progress.
+
+    No-op when stderr is not a TTY (pipes, redirects, CI) to avoid
+    flooding output with ANSI escape sequences.
+    """
+    if not sys.stderr.isatty():
+        yield
+        return
+
     global _spinner_active, _spinner_label_len, _spinner_label
     frames = ["\u280b", "\u2819", "\u2839", "\u2838", "\u283c", "\u2834", "\u2826", "\u2827", "\u2807", "\u280f"]
     stop = threading.Event()
