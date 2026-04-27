@@ -1,0 +1,29 @@
+title: AWS Bedrock Long-Term API Key Created
+id: 4d6a3a17-9b6e-4e1f-ab85-bedrock-api-key-create
+status: stable
+description: |
+    Detects creation of a Bedrock service-specific credential — a long-term
+    ABSK API key. Each creation also silently provisions a phantom IAM user
+    named BedrockAPIKey-<id> with the AmazonBedrockLimitedAccess managed
+    policy attached.
+references:
+    - https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html
+    - https://github.com/BeyondTrust/bedrock-keys-security
+author: BeyondTrust Phantom Labs
+date: 2026/04/27
+tags:
+    - attack.credential_access
+    - attack.t1098.001
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    selection:
+        eventSource: iam.amazonaws.com
+        eventName: CreateServiceSpecificCredential
+        requestParameters.serviceName: bedrock.amazonaws.com
+    condition: selection
+falsepositives:
+    - Legitimate developer onboarding to Bedrock when API keys are sanctioned.
+      Pair with allowlist of expected principals (CI roles, dev IAM users).
+level: medium
