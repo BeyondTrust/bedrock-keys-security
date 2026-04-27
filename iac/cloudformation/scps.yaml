@@ -1,0 +1,141 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: |
+  Bedrock API key SCPs. Mirrors the four JSON SCPs in scps/. Each SCP is
+  optional via parameters. Deploy in the AWS Organizations management
+  account; OU attachment is left to the operator.
+
+  Source: https://github.com/BeyondTrust/bedrock-keys-security
+
+Parameters:
+  EnableBlockAllKeys:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: Create the Block-Bedrock-API-Keys SCP (recommended baseline).
+
+  EnableEnforce90DayMax:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Create the 90-day max lifetime SCP.
+
+  EnableBlockLongTermOnly:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Create the long-term-only block SCP (allow short-term keys).
+
+  EnableBlockPhantomAccessKeys:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: Create the phantom-user escalation block SCP (recommended baseline).
+
+Conditions:
+  CreateBlockAllKeys: !Equals [!Ref EnableBlockAllKeys, 'true']
+  CreateEnforce90Day: !Equals [!Ref EnableEnforce90DayMax, 'true']
+  CreateBlockLongTerm: !Equals [!Ref EnableBlockLongTermOnly, 'true']
+  CreatePhantomBlock: !Equals [!Ref EnableBlockPhantomAccessKeys, 'true']
+
+Resources:
+  BlockAllBedrockKeys:
+    Type: AWS::Organizations::Policy
+    Condition: CreateBlockAllKeys
+    Properties:
+      Name: Block-Bedrock-API-Keys
+      Description: Deny creation and use of any Bedrock API key.
+      Type: SERVICE_CONTROL_POLICY
+      Content:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Action: iam:CreateServiceSpecificCredential
+            Resource: '*'
+            Condition:
+              StringEquals:
+                iam:ServiceSpecificCredentialServiceName: bedrock.amazonaws.com
+          - Effect: Deny
+            Action: bedrock:CallWithBearerToken
+            Resource: '*'
+
+  Enforce90DayMaxBedrockKeyLifetime:
+    Type: AWS::Organizations::Policy
+    Condition: CreateEnforce90Day
+    Properties:
+      Name: Enforce-Bedrock-90Day-Max
+      Description: Limit Bedrock service-specific credential lifetime to 90 days.
+      Type: SERVICE_CONTROL_POLICY
+      Content:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enforce90DayMaxExpiry
+            Effect: Deny
+            Action:
+              - iam:CreateServiceSpecificCredential
+            Resource: '*'
+            Condition:
+              StringEquals:
+                iam:ServiceSpecificCredentialServiceName: bedrock.amazonaws.com
+              NumericGreaterThan:
+                iam:ServiceSpecificCredentialAgeDays: '90'
+
+  BlockLongTermBedrockKeys:
+    Type: AWS::Organizations::Policy
+    Condition: CreateBlockLongTerm
+    Properties:
+      Name: Block-Long-Term-Bedrock-Keys
+      Description: Deny long-term (ABSK) bearer tokens; allow short-term.
+      Type: SERVICE_CONTROL_POLICY
+      Content:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Action: bedrock:CallWithBearerToken
+            Resource: '*'
+            Condition:
+              StringEquals:
+                bedrock:bearerTokenType: LONG_TERM
+
+  BlockPhantomUserEscalation:
+    Type: AWS::Organizations::Policy
+    Condition: CreatePhantomBlock
+    Properties:
+      Name: Block-Phantom-User-Escalation
+      Description: Deny IAM access key, console login, and MFA on BedrockAPIKey-* phantom users.
+      Type: SERVICE_CONTROL_POLICY
+      Content:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: BlockPhantomUserAccessKeyCreation
+            Effect: Deny
+            Action:
+              - iam:CreateAccessKey
+            Resource: arn:aws:iam::*:user/BedrockAPIKey-*
+          - Sid: BlockPhantomUserConsoleAccess
+            Effect: Deny
+            Action:
+              - iam:CreateLoginProfile
+              - iam:UpdateLoginProfile
+            Resource: arn:aws:iam::*:user/BedrockAPIKey-*
+          - Sid: BlockPhantomUserMFADevices
+            Effect: Deny
+            Action:
+              - iam:EnableMFADevice
+              - iam:CreateVirtualMFADevice
+            Resource:
+              - arn:aws:iam::*:user/BedrockAPIKey-*
+              - arn:aws:iam::*:mfa/BedrockAPIKey-*
+
+Outputs:
+  BlockAllKeysPolicyId:
+    Condition: CreateBlockAllKeys
+    Value: !Ref BlockAllBedrockKeys
+  Enforce90DayPolicyId:
+    Condition: CreateEnforce90Day
+    Value: !Ref Enforce90DayMaxBedrockKeyLifetime
+  BlockLongTermPolicyId:
+    Condition: CreateBlockLongTerm
+    Value: !Ref BlockLongTermBedrockKeys
+  BlockPhantomPolicyId:
+    Condition: CreatePhantomBlock
+    Value: !Ref BlockPhantomUserEscalation
