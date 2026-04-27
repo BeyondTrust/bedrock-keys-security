@@ -1,0 +1,34 @@
+title: Phantom IAM User Created (BedrockAPIKey-*)
+id: 6a8d2f31-4e92-4f15-bedrock-phantom-user-create
+status: stable
+description: |
+    Detects creation of an IAM user matching the BedrockAPIKey-* naming
+    convention. AWS automatically creates these users when a long-term
+    Bedrock API key is generated through the Console. Each phantom user
+    has the AmazonBedrockLimitedAccess managed policy attached and persists
+    indefinitely after the associated API key is deleted.
+
+    Pair with AttachUserPolicy and CreateServiceSpecificCredential events
+    in the same time window from the same actor for high-confidence
+    correlation of the Console-based provisioning sequence.
+references:
+    - https://github.com/BeyondTrust/bedrock-keys-security
+author: BeyondTrust Phantom Labs
+date: 2026/04/27
+tags:
+    - attack.persistence
+    - attack.t1136.003
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    selection:
+        eventSource: iam.amazonaws.com
+        eventName: CreateUser
+        requestParameters.userName|startswith: 'BedrockAPIKey-'
+    condition: selection
+falsepositives:
+    - Legitimate Bedrock API key generation by developers. The risk is not
+      the creation event itself but the resulting persistent IAM identity
+      with administrative Bedrock permissions.
+level: medium

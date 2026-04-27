@@ -1,0 +1,9 @@
+{
+  "_comment": "EventBridge rule pattern that matches every Bedrock API key request. Route to SNS for paging, Lambda for automation, or a third-party SIEM via API destinations. Pair with detections/sigma/bedrock-suspicious-user-agent.yml for higher-precision alerting. Reference: https://github.com/BeyondTrust/bedrock-keys-security",
+  "source": ["aws.bedrock"],
+  "detail": {
+    "additionalEventData": {
+      "callWithBearerToken": [true]
+    }
+  }
+}

@@ -1,0 +1,13 @@
+# CloudWatch Logs Insights — Bedrock API key usage breakdown.
+#
+# Run against your CloudTrail log group. Returns per-principal call counts
+# so you can establish a baseline before tuning higher-precision rules.
+#
+# Recommended alarm: result count > 100 per hour (adjust to your baseline).
+#
+# Reference: https://github.com/BeyondTrust/bedrock-keys-security
+
+fields @timestamp, userIdentity.principalId, sourceIPAddress, eventName, userAgent
+| filter additionalEventData.callWithBearerToken = true
+| stats count() by eventName, userIdentity.principalId
+| sort count desc

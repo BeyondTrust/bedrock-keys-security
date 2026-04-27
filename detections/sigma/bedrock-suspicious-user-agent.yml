@@ -1,0 +1,35 @@
+title: Bedrock API Key Used With Suspicious User Agent
+id: 3b7e9f42-5c81-4d67-bedrock-suspicious-ua
+status: experimental
+description: |
+    Detects Bedrock API key usage from generic, scripted, or off-the-shelf
+    HTTP clients commonly observed in LLMjacking operations. Legitimate
+    applications use AWS SDK user-agent strings; attackers running
+    concurrent asynchronous requests at high volume use python-requests,
+    aiohttp, or curl with default user agents.
+
+    This is a high-precision filter when combined with the callWithBearerToken
+    signal. Tune the regex to your environment — some legitimate tooling
+    (Lambda runtimes, custom integrations) may match.
+references:
+    - https://sysdig.com/blog/growing-dangers-of-llmjacking
+    - https://github.com/BeyondTrust/bedrock-keys-security
+author: BeyondTrust Phantom Labs
+date: 2026/04/27
+tags:
+    - attack.impact
+    - attack.t1496
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    bearer_token:
+        eventSource: bedrock.amazonaws.com
+        additionalEventData.callWithBearerToken: true
+    suspicious_ua:
+        userAgent|re: '(?i)(python-requests|aiohttp|curl/|httpx|axios|node-fetch)'
+    condition: bearer_token and suspicious_ua
+falsepositives:
+    - Legitimate scripts and CI jobs using non-SDK HTTP clients. Allowlist
+      by sourceIPAddress or principalId before alerting.
+level: high
