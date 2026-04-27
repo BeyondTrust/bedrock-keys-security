@@ -81,7 +81,8 @@ class PhantomUserScanner:
             active_creds = [c for c in credentials if c['Status'] == 'Active']
 
             if self.verbose and active_creds:
-                click.echo(output.yellow(f"  [CRED] {username}: {len(active_creds)} active Bedrock API key(s)"))
+                key_word = "key" if len(active_creds) == 1 else "keys"
+                output.warning(f"{username}: {len(active_creds)} active Bedrock API {key_word}")
 
             return {
                 'bedrock_credentials': len(credentials),
@@ -112,7 +113,8 @@ class PhantomUserScanner:
             active_keys = [k for k in access_keys if k['Status'] == 'Active']
 
             if active_keys and self.verbose:
-                output.high_risk(f"{username}: {len(active_keys)} IAM access key(s) found (AT RISK)")
+                key_word = "key" if len(active_keys) == 1 else "keys"
+                output.high_risk(f"{username}: {len(active_keys)} IAM access {key_word} found (AT RISK)")
 
             return {
                 'access_keys': len(access_keys),
@@ -176,15 +178,15 @@ class PhantomUserScanner:
 
                 access_keys = self.iam.list_access_keys(UserName=username)['AccessKeyMetadata']
                 if access_keys:
-                    click.echo(output.yellow(f"  - Would delete {len(access_keys)} access key(s)"))
+                    click.echo(output.yellow(f"  - Would delete {len(access_keys)} access {'key' if len(access_keys) == 1 else 'keys'}"))
 
                 service_creds = self.iam.list_service_specific_credentials(UserName=username)['ServiceSpecificCredentials']
                 if service_creds:
-                    click.echo(output.yellow(f"  - Would delete {len(service_creds)} Bedrock API key(s)"))
+                    click.echo(output.yellow(f"  - Would delete {len(service_creds)} Bedrock API {'key' if len(service_creds) == 1 else 'keys'}"))
 
                 attached = self.iam.list_attached_user_policies(UserName=username)['AttachedPolicies']
                 if attached:
-                    click.echo(output.yellow(f"  - Would detach {len(attached)} managed polic(y/ies)"))
+                    click.echo(output.yellow(f"  - Would detach {len(attached)} managed {'policy' if len(attached) == 1 else 'policies'}"))
 
                 inline = self.iam.list_user_policies(UserName=username)['PolicyNames']
                 if inline:
@@ -266,7 +268,7 @@ class PhantomUserScanner:
 
         # Confirmation prompt (unless forced or dry-run)
         if not dry_run and not force:
-            if not click.confirm(click.style(f"Delete {len(orphaned_users)} orphaned phantom user(s)?", fg="yellow"), default=False):
+            if not click.confirm(click.style(f"Delete {len(orphaned_users)} orphaned phantom {'user' if len(orphaned_users) == 1 else 'users'}?", fg="yellow"), default=False):
                 output.info("Cleanup cancelled by user.")
                 return {'total': len(orphaned_users), 'deleted': 0, 'failed': 0}
 
@@ -380,7 +382,8 @@ class PhantomUserScanner:
                 click.echo(output.yellow(f"No CloudTrail events found for {username}") + "\n")
                 return
 
-            click.echo(f"{output.bold(f'Found {len(events)} event(s):')}\n")
+            event_word = "event" if len(events) == 1 else "events"
+            click.echo(f"{output.bold(f'Found {len(events)} {event_word}:')}\n")
 
             for event in events:
                 event_data = json.loads(event['CloudTrailEvent'])
@@ -449,7 +452,7 @@ class PhantomUserScanner:
             access_keys = self.iam.list_access_keys(UserName=username)['AccessKeyMetadata']
 
             if access_keys:
-                report_lines.append(f"  \u26a0\ufe0f  WARNING: {len(access_keys)} IAM access key(s) found!")
+                report_lines.append(f"  \u26a0\ufe0f  WARNING: {len(access_keys)} IAM access {'key' if len(access_keys) == 1 else 'keys'} found!")
                 for key in access_keys:
                     report_lines.append(f"    Key ID: {key['AccessKeyId']}")
                     report_lines.append(f"    Status: {key['Status']}")
@@ -517,6 +520,35 @@ class PhantomUserScanner:
         lines.append(f"Region:  {self.region}")
         return '\n'.join(lines)
 
+    def _format_summary(self, phantoms: List[Dict], total: int, active: int, orphaned: int, at_risk: int) -> List[str]:
+        """Format the summary block shared between report methods"""
+        lines = []
+        lines.append(f"\n{output.bold('Summary:')}")
+        lines.append(f"  Total phantom users: {output.cyan(str(total))}")
+        lines.append(f"  Active: {output.green(str(active))}")
+        lines.append(f"  Orphaned: {output.yellow(str(orphaned))} (safe to cleanup)")
+        lines.append(f"  At Risk: {output.red(str(at_risk))} (IAM access keys found)")
+
+        if at_risk > 0:
+            lines.append(f"\n{click.style('AT RISK users detected:', fg='red', bold=True)}")
+            lines.append(output.red("These phantom users have IAM access keys (AKIA...) attached."))
+            lines.append(output.red("These keys grant bedrock:*, iam:ListRoles, kms:DescribeKey,"))
+            lines.append(output.red("ec2:Describe* and persist even if the API key is revoked. Investigate:"))
+            for user in phantoms:
+                if user['status'] == 'AT RISK':
+                    n = user['active_access_keys']
+                    key_label = "access key" if n == 1 else "access keys"
+                    lines.append(output.red(f"    - {user['username']} ({n} {key_label})"))
+            lines.append("")
+
+        if orphaned > 0:
+            lines.append(f"\n{output.yellow(f'{orphaned} orphaned phantom users can be cleaned up.')}")
+            lines.append(output.yellow("These users have no active credentials and can be safely deleted to reduce your attack surface."))
+            lines.append(output.yellow("Run: bks cleanup --dry-run  to preview, or cleanup to delete."))
+            lines.append("")
+
+        return lines
+
     def generate_table_report(self, phantoms: List[Dict]) -> str:
         """Generate formatted table report"""
         if not phantoms:
@@ -543,27 +575,7 @@ class PhantomUserScanner:
         headers = ['Username', 'Created', 'Active API Keys', 'Access Keys', 'Status']
         lines.append(tabulate(table_data, headers=headers, tablefmt='grid'))
 
-        lines.append(f"\n{output.bold('Summary:')}")
-        lines.append(f"  Total phantom users: {output.cyan(str(total))}")
-        lines.append(f"  Active: {output.green(str(active))}")
-        lines.append(f"  Orphaned: {output.yellow(str(orphaned))} (safe to cleanup)")
-        lines.append(f"  At Risk: {output.red(str(at_risk))} (IAM access keys found)")
-
-        if at_risk > 0:
-            lines.append(f"\n{click.style('AT RISK users detected:', fg='red', bold=True)}")
-            lines.append(output.red("These phantom users have IAM access keys (AKIA...) attached."))
-            lines.append(output.red("These keys grant bedrock:*, iam:ListRoles, kms:DescribeKey,"))
-            lines.append(output.red("ec2:Describe* and persist even if the API key is revoked. Investigate:"))
-            for user in phantoms:
-                if user['status'] == 'AT RISK':
-                    lines.append(output.red(f"    - {user['username']} ({user['active_access_keys']} access keys)"))
-            lines.append("")
-
-        if orphaned > 0:
-            lines.append(f"\n{output.yellow(f'{orphaned} orphaned phantom users can be cleaned up.')}")
-            lines.append(output.yellow("These users have no active credentials and can be safely deleted to reduce your attack surface."))
-            lines.append(output.yellow("Run: bks cleanup --dry-run  to preview, or cleanup to delete."))
-            lines.append("")
+        lines.extend(self._format_summary(phantoms, total, active, orphaned, at_risk))
 
         return '\n'.join(lines)
 

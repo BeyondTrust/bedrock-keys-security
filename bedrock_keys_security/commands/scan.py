@@ -8,9 +8,14 @@ from bedrock_keys_security.utils import output
 @click.command()
 @click.option('--json', 'output_json', is_flag=True, help='Output results as JSON')
 @click.option('--csv', 'csv_file', default=None, metavar='FILE', help='Export results to CSV file')
+@click.option('--verbose', '-v', is_flag=True, help='Enable verbose log output during scan')
 @click.pass_context
-def scan(ctx, output_json, csv_file):
+def scan(ctx, output_json, csv_file, verbose):
     """Scan for phantom IAM users (default command)"""
+    # Merge: scan-level --verbose enables verbose on the context
+    if verbose:
+        ctx.obj.verbose = True
+
     scanner = ctx.obj.scanner
 
     if not output_json:
