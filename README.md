@@ -4,7 +4,30 @@ Security toolkit for AWS Bedrock API keys. Discover phantom IAM users, decode le
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![PyPI](https://img.shields.io/pypi/v/bedrock-keys-security.svg)](https://pypi.org/project/bedrock-keys-security/)
 [![Twitter](https://img.shields.io/twitter/url/https/twitter.com/MrCloudSec.svg?style=social&label=Follow%20the%20author)](https://twitter.com/MrCloudSec)
+
+## Quickstart
+
+```bash
+pip install bedrock-keys-security
+bks scan --profile your-aws-profile
+```
+
+That's it. The scanner discovers every `BedrockAPIKey-*` phantom user in the account, categorizes risk (`ACTIVE` / `ORPHANED` / `AT RISK`), and prints a summary table.
+
+```bash
+# Decode a leaked key offline (no AWS credentials needed)
+bks decode-key "ABSKQmVkcm9ja..."
+
+# Investigate a phantom user across every region with CloudTrail coverage
+bks timeline BedrockAPIKey-xxxx --all-regions --days 30
+
+# Emergency revocation: deny Bedrock + delete API keys + disable AKIA pivots
+bks revoke-key BedrockAPIKey-xxxx
+```
+
+Detection content for SIEMs (Sigma, CloudTrail Lake, Athena) lives in [`detections/`](detections/). Terraform and CloudFormation for the SCPs live in [`iac/`](iac/).
 
 ## Motivation
 
@@ -70,7 +93,7 @@ All commands except `decode-key` also call `sts:GetCallerIdentity` to confirm th
 | `scan` | `iam:ListUsers`, `iam:ListServiceSpecificCredentials`, `iam:ListAccessKeys`, `iam:ListAttachedUserPolicies`, `iam:ListUserPolicies` |
 | `cleanup` | All scan permissions + `iam:DeleteAccessKey`, `iam:DeleteServiceSpecificCredential`, `iam:DetachUserPolicy`, `iam:DeleteUserPolicy`, `iam:DeleteUser` |
 | `revoke-key` | `iam:PutUserPolicy`, `iam:ListServiceSpecificCredentials`, `iam:DeleteServiceSpecificCredential`, `iam:ListAccessKeys`, `iam:UpdateAccessKey` |
-| `timeline` | `cloudtrail:LookupEvents` |
+| `timeline` | `cloudtrail:LookupEvents` (+ `cloudtrail:DescribeTrails` and `ec2:DescribeRegions` when using `--all-regions`) |
 | `report` | `iam:GetUser`, `iam:ListServiceSpecificCredentials`, `iam:ListAccessKeys`, `iam:ListAttachedUserPolicies`, `iam:ListUserPolicies` |
 | `decode-key` | None (offline) |
 
@@ -112,14 +135,18 @@ Only ORPHANED users are affected. ACTIVE and AT RISK users are never deleted aut
 When a key is compromised, `bks` provides emergency response capabilities:
 
 ```bash
-bks revoke-key BedrockAPIKey-xxxx              # emergency key revocation
-bks timeline BedrockAPIKey-xxxx                # CloudTrail timeline (last 7 days)
-bks timeline BedrockAPIKey-xxxx --days 30      # extended timeline
-bks report BedrockAPIKey-xxxx                  # full incident report
+bks revoke-key BedrockAPIKey-xxxx                 # emergency key revocation
+bks revoke-key BedrockAPIKey-xxxx --force         # skip confirmation
+bks timeline BedrockAPIKey-xxxx                   # CloudTrail timeline (last 7 days, configured region)
+bks timeline BedrockAPIKey-xxxx --days 30         # extended timeline
+bks timeline BedrockAPIKey-xxxx --all-regions     # fan out across every region with CloudTrail coverage
+bks report BedrockAPIKey-xxxx                     # full incident report
 bks report BedrockAPIKey-xxxx --output report.txt
 ```
 
-The `revoke-key` command applies an inline deny policy and deletes all Bedrock credentials in a single operation.
+`revoke-key` applies an inline `Deny: bedrock:*` policy, deletes all Bedrock service-specific credentials, and disables IAM access keys (`AKIA*`) on the phantom user — closing the privilege-escalation pivot in the same operation.
+
+`timeline --all-regions` is recommended whenever LLMjacking is suspected. It runs `cloudtrail:DescribeTrails` to map coverage, enumerates enabled regions via `ec2:DescribeRegions`, and fans the lookup out across every region with an active trail. Bedrock data-plane events (`InvokeModel`, `Converse`, `CallWithBearerToken`) are recorded in the region where Bedrock was called, so a single-region timeline misses cross-region fan-out by design.
 
 <img src="https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/revoke-key.png" alt="Revoke Key" width="600">
 
@@ -184,6 +211,25 @@ aws organizations create-policy \
 ```
 
 > **Note:** Always test SCPs on non-production OUs before applying broadly.
+
+### Infrastructure as Code
+
+The same four SCPs are available as ready-to-deploy modules:
+
+- **Terraform** — [`iac/terraform/`](iac/terraform/): `aws_organizations_policy` resources with optional OU attachment. Reads policy bodies from `scps/*.json` so the module and the JSON cannot drift.
+- **CloudFormation** — [`iac/cloudformation/scps.yaml`](iac/cloudformation/scps.yaml): single template with conditional resources, StackSet-friendly.
+
+Both default to enabling `Block-Bedrock-API-Keys` plus `Block-Phantom-User-Escalation` — the recommended baseline pair.
+
+## Detection Content
+
+SOC-grade detection rules for the full attack chain are in [`detections/`](detections/):
+
+| Format | Coverage |
+|---|---|
+| Sigma (3 rules) | Long-term key creation, phantom-user AKIA escalation, cross-region bearer token fan-out |
+| CloudTrail Lake (2 queries) | Per-principal invocation rate spikes, IAM pivot detection |
+| Athena (2 queries) | Cross-region bearer token reuse, top-N principals by InvokeModel count |
 
 ## Recommended Alternative: STS Temporary Credentials
 
