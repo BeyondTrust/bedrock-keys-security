@@ -33,7 +33,6 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/BeyondTrust/bedrock-keys-security"
 Issues = "https://github.com/BeyondTrust/bedrock-keys-security/issues"
-Discussions = "https://github.com/BeyondTrust/bedrock-keys-security/discussions"
 
 [project.scripts]
 bks = "bedrock_keys_security.cli:cli"

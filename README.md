@@ -63,11 +63,13 @@ bks --version
 
 After installation, the `bks` command is available globally. Requires Python 3.10+ and AWS credentials. Minimum permissions by command:
 
+All commands except `decode-key` also call `sts:GetCallerIdentity` to confirm the active session.
+
 | Command | IAM Permissions Required |
 |---|---|
 | `scan` | `iam:ListUsers`, `iam:ListServiceSpecificCredentials`, `iam:ListAccessKeys`, `iam:ListAttachedUserPolicies`, `iam:ListUserPolicies` |
 | `cleanup` | All scan permissions + `iam:DeleteAccessKey`, `iam:DeleteServiceSpecificCredential`, `iam:DetachUserPolicy`, `iam:DeleteUserPolicy`, `iam:DeleteUser` |
-| `revoke-key` | `iam:PutUserPolicy`, `iam:ListServiceSpecificCredentials`, `iam:DeleteServiceSpecificCredential` |
+| `revoke-key` | `iam:PutUserPolicy`, `iam:ListServiceSpecificCredentials`, `iam:DeleteServiceSpecificCredential`, `iam:ListAccessKeys`, `iam:UpdateAccessKey` |
 | `timeline` | `cloudtrail:LookupEvents` |
 | `report` | `iam:GetUser`, `iam:ListServiceSpecificCredentials`, `iam:ListAccessKeys`, `iam:ListAttachedUserPolicies`, `iam:ListUserPolicies` |
 | `decode-key` | None (offline) |
@@ -234,7 +236,6 @@ Apache 2.0. See [LICENSE](LICENSE).
 ## Contact
 
 - Issues and bugs: [GitHub Issues](https://github.com/BeyondTrust/bedrock-keys-security/issues)
-- Questions: [GitHub Discussions](https://github.com/BeyondTrust/bedrock-keys-security/discussions)
 - Twitter: [@btphantomlabs](https://x.com/btphantomlabs)
 
 ## References
