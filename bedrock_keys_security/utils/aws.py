@@ -15,6 +15,7 @@ class AWSSession:
 
         try:
             session = boto3.Session(profile_name=profile, region_name=self.region)
+            self.session = session
             self.iam = session.client("iam")
             self.sts = session.client("sts")
             self.cloudtrail = session.client("cloudtrail", region_name=self.region)

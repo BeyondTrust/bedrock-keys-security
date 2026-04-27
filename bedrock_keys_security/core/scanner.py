@@ -32,6 +32,7 @@ class PhantomUserScanner:
 
     def __init__(self, aws_session: AWSSession, verbose: bool = False):
         self.verbose = verbose
+        self.aws_session = aws_session
         self.iam = aws_session.iam
         self.sts = aws_session.sts
         self.cloudtrail = aws_session.cloudtrail
@@ -401,57 +402,143 @@ class PhantomUserScanner:
             output.error(f"Revocation failed: {e}")
             return False
 
-    def generate_timeline(self, username: str, days: int = 7) -> None:
-        """Generate CloudTrail timeline for phantom user activity"""
-        click.echo(f"\n{output.bold('CloudTrail Timeline Analysis')}")
-        click.echo(output.cyan(f"Username: {username}"))
-        click.echo(output.cyan(f"Time range: Last {days} days") + "\n")
+    def discover_trail_coverage(self) -> Dict[str, str]:
+        """Map enabled AWS regions to the CloudTrail trail covering them.
 
+        Returns {region: trail_name}. Multi-region or organization trails
+        cover all enabled regions; single-region trails cover only their
+        HomeRegion. Regions with no coverage are absent from the map.
+        """
         try:
-            start_time = datetime.now(timezone.utc) - timedelta(days=days)
-
-            output.info("Querying CloudTrail (this may take a moment)...\n")
-
-            response = self.cloudtrail.lookup_events(
-                LookupAttributes=[{
-                    'AttributeKey': 'Username',
-                    'AttributeValue': username
-                }],
-                StartTime=start_time,
-                MaxResults=50
-            )
-
-            events = response.get('Events', [])
-
-            if not events:
-                click.echo(output.yellow(f"No CloudTrail events found for {username}") + "\n")
-                return
-
-            event_word = "event" if len(events) == 1 else "events"
-            click.echo(f"{output.bold(f'Found {len(events)} {event_word}:')}\n")
-
-            for event in events:
-                event_data = json.loads(event['CloudTrailEvent'])
-                event_time = event['EventTime'].strftime('%Y-%m-%d %H:%M:%S UTC')
-                event_name = event['EventName']
-                event_source = event_data.get('eventSource', 'unknown')
-                source_ip = event_data.get('sourceIPAddress', 'unknown')
-                error_code = event_data.get('errorCode', '')
-
-                line = f"{event_time} | {event_name:40} | {event_source:30} | IP: {source_ip}"
-                if error_code:
-                    click.echo(output.red(line))
-                    click.echo(output.red(f"    \u2514\u2500 Error: {error_code}"))
-                elif 'Delete' in event_name or 'Create' in event_name:
-                    click.echo(output.yellow(line))
-                else:
-                    click.echo(output.cyan(line))
-
-            output.success("Timeline generation complete")
-            output.info("Review events above for suspicious activity\n")
-
+            trails = self.cloudtrail.describe_trails(includeShadowTrails=True).get('trailList', [])
         except ClientError as e:
-            output.error(f"Failed to query CloudTrail: {e}\n")
+            output.warning(f"Could not describe trails: {e}")
+            return {}
+
+        broad_trail = next(
+            (t.get('Name') for t in trails
+             if t.get('IsMultiRegionTrail') or t.get('IsOrganizationTrail')),
+            None,
+        )
+
+        coverage: Dict[str, str] = {}
+
+        if broad_trail:
+            try:
+                ec2 = self.aws_session.session.client('ec2', region_name='us-east-1')
+                regions = ec2.describe_regions(AllRegions=False).get('Regions', [])
+                for r in regions:
+                    coverage[r['RegionName']] = broad_trail
+            except ClientError as e:
+                output.warning(f"Could not enumerate regions: {e}")
+        else:
+            for t in trails:
+                home = t.get('HomeRegion')
+                if home:
+                    coverage[home] = t.get('Name', '<unnamed>')
+
+        return coverage
+
+    def _lookup_events_in_region(self, region: str, username: str, start_time: datetime, max_events: int) -> List[Dict]:
+        """Page through CloudTrail lookup_events in one region, capped at max_events."""
+        client = self.aws_session.session.client('cloudtrail', region_name=region)
+        events: List[Dict] = []
+        try:
+            paginator = client.get_paginator('lookup_events')
+            for page in paginator.paginate(
+                LookupAttributes=[{'AttributeKey': 'Username', 'AttributeValue': username}],
+                StartTime=start_time,
+                PaginationConfig={'MaxItems': max_events},
+            ):
+                for ev in page.get('Events', []):
+                    ev['_Region'] = region
+                    events.append(ev)
+        except ClientError as e:
+            output.warning(f"[{region}] CloudTrail lookup failed: {e}")
+        return events
+
+    def generate_timeline(self, username: str, days: int = 7, all_regions: bool = False, max_events: int = 1000) -> None:
+        """Generate CloudTrail timeline for phantom user activity.
+
+        With all_regions=False (default), queries only the configured region.
+        With all_regions=True, discovers CloudTrail coverage and iterates every
+        region with an active trail, then merges results by EventTime. Useful
+        for LLMjacking detection since Bedrock data-plane events are recorded
+        in the region where InvokeModel was called.
+        """
+        click.echo(f"\n{output.bold('CloudTrail Timeline Analysis')}")
+        click.echo(output.cyan(f"Username:   {username}"))
+        click.echo(output.cyan(f"Time range: Last {days} days"))
+
+        start_time = datetime.now(timezone.utc) - timedelta(days=days)
+
+        if all_regions:
+            output.info("Discovering CloudTrail coverage...")
+            coverage = self.discover_trail_coverage()
+            if not coverage:
+                output.warning("No CloudTrail trails found. Falling back to current region's 90-day event history.")
+                regions = [self.region]
+            else:
+                regions = sorted(coverage.keys())
+                trail_names = sorted(set(coverage.values()))
+                click.echo(output.cyan(f"Regions:    {len(regions)} covered by trail(s) {', '.join(trail_names)}"))
+        else:
+            regions = [self.region]
+            click.echo(output.cyan(f"Regions:    {self.region} (use --all-regions to fan out)"))
+        click.echo()
+
+        output.info(f"Querying CloudTrail across {len(regions)} region(s) (this may take a moment)...\n")
+
+        all_events: List[Dict] = []
+        if len(regions) == 1:
+            all_events = self._lookup_events_in_region(regions[0], username, start_time, max_events)
+        else:
+            with ThreadPoolExecutor(max_workers=min(SCAN_MAX_WORKERS, len(regions))) as pool:
+                futures = {
+                    pool.submit(self._lookup_events_in_region, r, username, start_time, max_events): r
+                    for r in regions
+                }
+                for fut in as_completed(futures):
+                    all_events.extend(fut.result())
+
+        if not all_events:
+            click.echo(output.yellow(f"No CloudTrail events found for {username}") + "\n")
+            return
+
+        all_events.sort(key=lambda e: e['EventTime'])
+
+        event_word = "event" if len(all_events) == 1 else "events"
+        click.echo(f"{output.bold(f'Found {len(all_events)} {event_word}:')}\n")
+
+        for event in all_events:
+            event_data = json.loads(event['CloudTrailEvent'])
+            event_time = event['EventTime'].strftime('%Y-%m-%d %H:%M:%S UTC')
+            event_name = event['EventName']
+            event_source = event_data.get('eventSource', 'unknown')
+            source_ip = event_data.get('sourceIPAddress', 'unknown')
+            error_code = event_data.get('errorCode', '')
+            region = event.get('_Region', self.region)
+
+            line = f"{event_time} | {region:14} | {event_name:36} | {event_source:30} | IP: {source_ip}"
+            if error_code:
+                click.echo(output.red(line))
+                click.echo(output.red(f"    \u2514\u2500 Error: {error_code}"))
+            elif 'Delete' in event_name or 'Create' in event_name:
+                click.echo(output.yellow(line))
+            else:
+                click.echo(output.cyan(line))
+
+        # Per-region tally \u2014 surfaces LLMjacking fan-out at a glance
+        from collections import Counter
+        region_tally = Counter(e.get('_Region', self.region) for e in all_events)
+        if len(region_tally) > 1:
+            click.echo(f"\n{output.bold('Region breakdown:')}")
+            for region, count in region_tally.most_common():
+                marker = output.red(' \u26a0 multi-region activity') if len(region_tally) > 1 else ''
+                click.echo(f"  {region:14} {count} events{marker}")
+
+        output.success("Timeline generation complete")
+        output.info("Review events above for suspicious activity\n")
 
     def generate_incident_report(self, username: str, output_file: Optional[str] = None) -> str:
         """Generate comprehensive incident report for phantom user"""
