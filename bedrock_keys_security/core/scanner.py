@@ -4,6 +4,7 @@ import csv
 import json
 import sys
 import click
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from tabulate import tabulate
 from typing import Dict, List, Optional
@@ -11,6 +12,10 @@ from botocore.exceptions import ClientError
 
 from bedrock_keys_security.utils import output
 from bedrock_keys_security.utils.aws import AWSSession
+
+# Per-user enrichment fans out 3 IAM API calls (creds, access keys, policies).
+# Cap parallelism low enough to stay well under IAM throttling thresholds.
+SCAN_MAX_WORKERS = 10
 
 
 def _json_default(obj):
@@ -35,44 +40,54 @@ class PhantomUserScanner:
         self.region = aws_session.region
 
     def find_phantom_users(self) -> List[Dict]:
-        """Find all IAM users starting with 'BedrockAPIKey-'"""
+        """Find all IAM users starting with 'BedrockAPIKey-' and enrich them in parallel"""
         if self.verbose:
             output.info("Scanning for phantom IAM users...")
 
-        phantom_users = []
-
+        # Phase 1: list users (paginated, sequential — single API call stream)
+        bare_users: List[Dict] = []
         try:
             paginator = self.iam.get_paginator('list_users')
-
             for page in paginator.paginate():
                 for user in page['Users']:
                     username = user['UserName']
-
                     if username.startswith('BedrockAPIKey-'):
                         if self.verbose:
                             output.info(f"Found phantom user: {username}")
-
-                        user_data = {
+                        bare_users.append({
                             'username': username,
                             'user_id': user['UserId'],
                             'arn': user['Arn'],
                             'created': user['CreateDate'],
-                            'path': user['Path']
-                        }
-
-                        user_data.update(self.check_credentials(username))
-                        user_data.update(self.check_access_keys(username))
-                        user_data.update(self.check_policies(username))
-                        user_data['status'] = self.categorize_status(user_data)
-
-                        phantom_users.append(user_data)
-
-            if self.verbose:
-                output.success(f"Found {len(phantom_users)} phantom users")
-
+                            'path': user['Path'],
+                        })
         except ClientError as e:
             output.error(f"Failed to list IAM users: {e}")
             sys.exit(1)
+
+        # Phase 2: enrich each user with 3 IAM calls in parallel.
+        # boto3 clients are thread-safe at the request level (each request
+        # gets its own underlying connection from the pool).
+        def enrich(user_data: Dict) -> Dict:
+            username = user_data['username']
+            user_data.update(self.check_credentials(username))
+            user_data.update(self.check_access_keys(username))
+            user_data.update(self.check_policies(username))
+            user_data['status'] = self.categorize_status(user_data)
+            return user_data
+
+        phantom_users: List[Dict] = []
+        if bare_users:
+            with ThreadPoolExecutor(max_workers=min(SCAN_MAX_WORKERS, len(bare_users))) as pool:
+                futures = [pool.submit(enrich, u) for u in bare_users]
+                for fut in as_completed(futures):
+                    phantom_users.append(fut.result())
+
+        # Preserve the list_users ordering (helpful for stable diffs across runs)
+        phantom_users.sort(key=lambda u: u['username'])
+
+        if self.verbose:
+            output.success(f"Found {len(phantom_users)} phantom users")
 
         return phantom_users
 
