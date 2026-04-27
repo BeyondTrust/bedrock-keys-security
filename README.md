@@ -5,6 +5,7 @@ Security toolkit for AWS Bedrock API keys. Discover phantom IAM users, decode le
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI](https://img.shields.io/pypi/v/bedrock-keys-security.svg)](https://pypi.org/project/bedrock-keys-security/)
+[![Featured in aws-samples](https://img.shields.io/badge/upstream-aws--samples%20%2323-FF9900.svg?logo=amazonaws&logoColor=white)](https://github.com/aws-samples/service-control-policy-examples/pull/23)
 [![Twitter](https://img.shields.io/twitter/url/https/twitter.com/MrCloudSec.svg?style=social&label=Follow%20the%20author)](https://twitter.com/MrCloudSec)
 
 ## Quickstart
@@ -265,9 +266,16 @@ API keys may still be necessary for legacy applications hardcoded for bearer tok
 <!-- **Further Reading:**
 - Blog: [BeyondTrust - AWS Bedrock API Keys Security Research](https://beyondtrust.com/blog/bedrock-api-keys-security) -->
 
-## Presentations
+## Talks & Recognition
 
-- [The Phantom of the Infrastructure: Investigating the Hidden IAM Risks in Bedrock API Keys](docs/bsides-seattle-2026.pdf) - BSides Seattle 2026
+**Conferences:**
+
+- **BSides Seattle 2026** — [slides](docs/bsides-seattle-2026.pdf)
+- **RootedCON Madrid** — *Phantom IAM Users in AWS Bedrock*
+
+**Upstream contributions:**
+
+- [`aws-samples/service-control-policy-examples` #23](https://github.com/aws-samples/service-control-policy-examples/pull/23) — `Block-Bedrock-API-Keys` SCP merged into the official AWS sample policy collection.
 
 ## Contributing
 

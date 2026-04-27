@@ -148,6 +148,13 @@ def format_decode_table_output(result: Dict) -> str:
     lines.append(f"  Type: {type_label}")
 
     if key_type == "long-term":
+        position = result.get('key_position', 'primary')
+        marker = result.get('key_index_marker')
+        position_label = (
+            red(f"secondary ({marker})") if position == 'secondary'
+            else green('primary')
+        )
+        lines.append(f"  Key Position:    {position_label}")
         lines.append(f"  IAM Username:    {cyan(result.get('username', 'N/A'))}")
         lines.append(f"  IAM User ARN:    {cyan(result.get('iam_user_arn', 'N/A'))}")
         lines.append(f"  AWS Account ID:  {cyan(result.get('account_id', 'N/A'))}")

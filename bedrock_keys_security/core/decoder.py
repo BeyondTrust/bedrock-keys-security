@@ -49,7 +49,7 @@ class BedrockKeyDecoder:
                 }
 
             parts = decoded_str.split('-at-')
-            username = parts[0]
+            username_raw = parts[0]
 
             if ':' not in parts[1]:
                 return {
@@ -60,25 +60,49 @@ class BedrockKeyDecoder:
             account_id, secret = parts[1].split(':', 1)
             secret_preview = (secret[:8] + '...') if len(secret) > 8 else secret
             secret_fingerprint = hashlib.sha256(secret.encode('utf-8')).hexdigest()[:16]
+
+            # AWS allows two ABSK credentials per phantom user. The second key's
+            # decoded payload includes a +N marker (typically +1) appended to the
+            # IAM username. The marker is NOT part of the actual IAM username,
+            # so strip it before constructing user-facing identifiers.
+            if '+' in username_raw:
+                username, index_marker = username_raw.split('+', 1)
+                key_position = 'secondary'
+                key_index_marker = f'+{index_marker}'
+            else:
+                username = username_raw
+                key_position = 'primary'
+                key_index_marker = None
+
             user_suffix = username[len('BedrockAPIKey-'):] if username.startswith('BedrockAPIKey-') else username
+
+            security_notes = [
+                'AWS Account ID disclosed (enables reconnaissance)',
+                'IAM username disclosed (enables targeted attacks)',
+                'ABSK prefix enables automated secret scanning',
+                'Credential persists until explicitly revoked',
+            ]
+            if key_position == 'secondary':
+                security_notes.append(
+                    'Secondary key (+N marker present) — phantom user has at least 2 active ABSK credentials'
+                )
 
             return {
                 'type': 'long-term',
                 'format': 'ABSK + base64(username-at-accountid:secret)',
                 'username': username,
                 'username_suffix': user_suffix,
+                'username_raw': username_raw,
+                'key_position': key_position,
+                'key_index_marker': key_index_marker,
+                'is_secondary': key_position == 'secondary',
                 'account_id': account_id,
                 'iam_user_arn': f'arn:aws:iam::{account_id}:user/{username}',
                 'secret_preview': secret_preview,
                 'secret_length': len(secret),
                 'secret_sha256_16': secret_fingerprint,
                 'full_decoded': decoded_str,
-                'security_notes': [
-                    'AWS Account ID disclosed (enables reconnaissance)',
-                    'IAM username disclosed (enables targeted attacks)',
-                    'ABSK prefix enables automated secret scanning',
-                    'Credential persists until explicitly revoked',
-                ],
+                'security_notes': security_notes,
             }
 
         except Exception as e:
