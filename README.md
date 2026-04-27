@@ -35,11 +35,11 @@ Detection content for SIEMs (Sigma, CloudTrail Lake, Athena) lives in [`detectio
 When a user creates a long-term Bedrock API key through the AWS Console, AWS silently provisions an IAM user named `BedrockAPIKey-xxxx` and attaches the [`AmazonBedrockLimitedAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonBedrockLimitedAccess.html) managed policy. Despite its name, this policy grants broad permissions:
 
 - 47 `bedrock:*` actions covering full Bedrock administration: `Get*`, `List*`, `CallWithBearerToken`, plus explicit `Create*`/`Delete*`/`Update*`/`Stop*` on guardrails, custom models, provisioned throughput, evaluation jobs, inference profiles, prompt routers, and automated reasoning policies.
-- 4 `bedrock-mantle:*` actions (`CallWithBearerToken`, `Get*`, `List*`, `CreateInference`) — the bearer-token surface extends to the Bedrock-Mantle service too.
 - `iam:ListRoles` (identity enumeration)
 - `kms:DescribeKey` (encryption key discovery)
 - `ec2:DescribeVpcs`, `ec2:DescribeSubnets`, `ec2:DescribeSecurityGroups` (network and firewall reconnaissance)
-- `aws-marketplace:Subscribe`, `Unsubscribe`, `ViewSubscriptions` — gated by an `aws:CalledViaLast` condition so they only execute when the request flows through Bedrock or Bedrock-Mantle (a direct AKIA call cannot trigger them).
+
+The policy v8 also lists 4 `bedrock-mantle:*` actions and 3 `aws-marketplace:*` actions (the latter gated by `aws:CalledViaLast`). As of April 2026 these are not directly exercisable by an external client — `bedrock-mantle` has no DNS-resolvable endpoint and the marketplace condition restricts the actions to call chains initiated through Bedrock service-internal flows.
 
 These phantom users are never automatically cleaned up. They accumulate over time, creating an expanding attack surface that most organizations don't know exists.
 

@@ -666,10 +666,10 @@ class PhantomUserScanner:
             lines.append(output.red("These phantom users have IAM access keys (AKIA...) attached. Through the"))
             lines.append(output.red("AmazonBedrockLimitedAccess policy these keys inherit 47 bedrock: actions"))
             lines.append(output.red("(full Create/Delete/Update/Invoke lifecycle including DeleteGuardrail,"))
-            lines.append(output.red("DeleteCustomModel, DeleteProvisionedModelThroughput), 4 bedrock-mantle:"))
-            lines.append(output.red("actions, plus cross-service reconnaissance: iam:ListRoles, ec2:DescribeVpcs,"))
-            lines.append(output.red("ec2:DescribeSubnets, ec2:DescribeSecurityGroups, kms:DescribeKey. They"))
-            lines.append(output.red("persist even if the API key is revoked. Investigate:"))
+            lines.append(output.red("DeleteCustomModel, DeleteProvisionedModelThroughput) plus cross-service"))
+            lines.append(output.red("reconnaissance: iam:ListRoles, ec2:DescribeVpcs, ec2:DescribeSubnets,"))
+            lines.append(output.red("ec2:DescribeSecurityGroups, kms:DescribeKey. They persist even if the"))
+            lines.append(output.red("API key is revoked. Investigate:"))
             for user in phantoms:
                 if user['status'] == 'AT RISK':
                     n = user['active_access_keys']
