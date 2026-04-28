@@ -5,7 +5,6 @@ Security toolkit for AWS Bedrock API keys. Discover phantom IAM users, decode le
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI](https://img.shields.io/pypi/v/bedrock-keys-security.svg)](https://pypi.org/project/bedrock-keys-security/)
-[![Featured in aws-samples](https://img.shields.io/badge/upstream-aws--samples%20%2323-FF9900.svg?logo=amazonaws&logoColor=white)](https://github.com/aws-samples/service-control-policy-examples/pull/23)
 [![Twitter](https://img.shields.io/twitter/url/https/twitter.com/MrCloudSec.svg?style=social&label=Follow%20the%20author)](https://twitter.com/MrCloudSec)
 
 ## Quickstart
@@ -28,7 +27,7 @@ bks timeline BedrockAPIKey-xxxx --all-regions --days 30
 bks revoke-key BedrockAPIKey-xxxx
 ```
 
-Detection content for SIEMs (Sigma, CloudTrail Lake, Athena) lives in [`detections/`](detections/). Terraform and CloudFormation for the SCPs live in [`iac/`](iac/).
+Detection content (Sigma, CloudTrail Lake, Athena, EventBridge, CloudWatch Insights) lives in [`detections/`](detections/). Terraform and CloudFormation for the SCPs live in [`iac/`](iac/).
 
 ## Motivation
 
@@ -39,7 +38,7 @@ When a user creates a long-term Bedrock API key through the AWS Console, AWS sil
 - `kms:DescribeKey` (encryption key discovery)
 - `ec2:DescribeVpcs`, `ec2:DescribeSubnets`, `ec2:DescribeSecurityGroups` (network and firewall reconnaissance)
 
-The policy v8 also lists 4 `bedrock-mantle:*` actions and 3 `aws-marketplace:*` actions (the latter gated by `aws:CalledViaLast`). As of April 2026 these are not directly exercisable by an external client — `bedrock-mantle` has no DNS-resolvable endpoint and the marketplace condition restricts the actions to call chains initiated through Bedrock service-internal flows.
+The policy v8 also lists 4 `bedrock-mantle:*` actions and 3 `aws-marketplace:*` actions. The marketplace actions are scoped to internal Bedrock service flows and cannot be invoked directly with a leaked API key.
 
 These phantom users are never automatically cleaned up. They accumulate over time, creating an expanding attack surface that most organizations don't know exists.
 
@@ -47,19 +46,16 @@ These phantom users are never automatically cleaned up. They accumulate over tim
 
 ![Attack Paths Diagram](https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/attack-paths.jpeg)
 
-**LLMjacking:** An attacker who obtains a leaked key can spin up workers across all AWS regions to consume foundation model capacity. Organizations have reported fraudulent charges exceeding $14,000/day per region.
+**LLMjacking:** An attacker who obtains a leaked key can spin up workers across all AWS regions to consume foundation model capacity. The default Bedrock service quota and Claude Opus 4.7 pricing put the worst-case exposure at up to $18,000/day per region.
 
 ![LLMjacking Attack Flow](https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/llm-jacking.jpeg)
 
 **Privilege Escalation:** If an attacker creates an IAM access key on the phantom user, or if one already exists, they gain persistent IAM credentials (`AKIA...`) that extend well beyond Bedrock. From there, they can pivot to S3, Secrets Manager, and other services, even after the original Bedrock key expires.
 
-## Overview
+## What This Toolkit Provides
 
-AWS Bedrock API keys ([launched July 2025](https://aws.amazon.com/blogs/machine-learning/accelerate-ai-development-with-amazon-bedrock-api-keys/)) introduce multiple security risks that organizations must understand before deployment. While designed to simplify authentication, they create permanent attack surfaces through phantom IAM user creation, overprivileged default policies, and bearer token authentication.
+Bedrock API keys [launched in July 2025](https://aws.amazon.com/blogs/machine-learning/accelerate-ai-development-with-amazon-bedrock-api-keys/). Within 14 days, keys were already leaking on public GitHub. This toolkit provides:
 
-Long-term keys automatically provision IAM users (`BedrockAPIKey-xxxx`) with admin-level Bedrock permissions that persist indefinitely, even after the key is deleted or expires. Within 14 days of launch, keys were already leaking to GitHub. Criminal organizations generate an estimated $1M/year in annualized revenue from stolen keys, with fraudulent charges reaching up to $14,000/day per region.
-
-This toolkit provides:
 - **Discovery:** Scan your account for phantom IAM users and categorize their risk
 - **Incident Response:** Emergency key revocation, CloudTrail timelines, and forensic reports
 - **Key Decoding:** Offline analysis of leaked keys to extract account and identity information
@@ -87,9 +83,7 @@ Verify the installation:
 bks --version
 ```
 
-After installation, the `bks` command is available globally. Requires Python 3.10+ and AWS credentials. Minimum permissions by command:
-
-All commands except `decode-key` also call `sts:GetCallerIdentity` to confirm the active session.
+After installation, the `bks` command is available globally. Requires Python 3.10+ and AWS credentials. Minimum IAM permissions by command:
 
 | Command | IAM Permissions Required |
 |---|---|
@@ -99,6 +93,8 @@ All commands except `decode-key` also call `sts:GetCallerIdentity` to confirm th
 | `timeline` | `cloudtrail:LookupEvents` (+ `cloudtrail:DescribeTrails` and `ec2:DescribeRegions` when using `--all-regions`) |
 | `report` | `iam:GetUser`, `iam:ListServiceSpecificCredentials`, `iam:ListAccessKeys`, `iam:ListAttachedUserPolicies`, `iam:ListUserPolicies` |
 | `decode-key` | None (offline) |
+
+All commands except `decode-key` also call `sts:GetCallerIdentity` to confirm the active session.
 
 ## Usage
 
@@ -230,9 +226,11 @@ SOC-grade detection rules for the full attack chain are in [`detections/`](detec
 
 | Format | Coverage |
 |---|---|
-| Sigma (3 rules) | Long-term key creation, phantom-user AKIA escalation, cross-region bearer token fan-out |
+| Sigma (6 rules) | Bearer token usage baseline, long-term key creation, phantom-user creation, phantom-user AKIA escalation, cross-region bearer token fan-out, suspicious user-agent invocation |
 | CloudTrail Lake (2 queries) | Per-principal invocation rate spikes, IAM pivot detection |
 | Athena (2 queries) | Cross-region bearer token reuse, top-N principals by InvokeModel count |
+| EventBridge (1 pattern) | Drop-in rule matching every Bedrock API key request |
+| CloudWatch Insights (1 query) | Per-principal usage breakdown for native AWS monitoring |
 
 ## Recommended Alternative: STS Temporary Credentials
 
@@ -253,7 +251,7 @@ export AWS_ACCESS_KEY_ID=ASIA...
 export AWS_SECRET_ACCESS_KEY=...
 export AWS_SESSION_TOKEN=...
 
-aws bedrock invoke-model --model-id anthropic.claude-3-sonnet...
+aws bedrock invoke-model --model-id anthropic.claude-opus-4-7...
 ```
 
 API keys may still be necessary for legacy applications hardcoded for bearer tokens, third-party tools without SigV4 support, or vendor software lacking STS integration. In those cases, use short-term keys with a maximum 12-hour lifetime and enforce restrictions with the SCPs above.
@@ -268,16 +266,10 @@ API keys may still be necessary for legacy applications hardcoded for bearer tok
 <!-- **Further Reading:**
 - Blog: [BeyondTrust - AWS Bedrock API Keys Security Research](https://beyondtrust.com/blog/bedrock-api-keys-security) -->
 
-## Talks & Recognition
-
-**Conferences:**
+## Talks
 
 - **BSides Seattle 2026** — [slides](docs/bsides-seattle-2026.pdf)
 - **RootedCON Madrid** — *Phantom IAM Users in AWS Bedrock*
-
-**Upstream contributions:**
-
-- [`aws-samples/service-control-policy-examples` #23](https://github.com/aws-samples/service-control-policy-examples/pull/23) — `Block-Bedrock-API-Keys` SCP merged into the official AWS sample policy collection.
 
 ## Contributing
 
