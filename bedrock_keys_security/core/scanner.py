@@ -408,6 +408,16 @@ class PhantomUserScanner:
         Returns {region: trail_name}. Multi-region or organization trails
         cover all enabled regions; single-region trails cover only their
         HomeRegion. Regions with no coverage are absent from the map.
+
+        For full trail metadata (IsMultiRegionTrail, IsOrganizationTrail,
+        HomeRegion, plus trails from other regions whose shadow lives here)
+        we use cloudtrail:DescribeTrails. The API does not expose a
+        paginator (no NextToken in the response shape), so list_trails +
+        get_trail per ARN would be required to true-paginate. In practice
+        an account rarely has more than a handful of trails and the AWS
+        API returns the full list in a single response; we accept that
+        contract here. If your org runs hundreds of trails per account,
+        consider migrating to list_trails + get_trail.
         """
         try:
             trails = self.cloudtrail.describe_trails(includeShadowTrails=True).get('trailList', [])
@@ -425,7 +435,7 @@ class PhantomUserScanner:
 
         if broad_trail:
             try:
-                ec2 = self.aws_session.session.client('ec2', region_name='us-east-1')
+                ec2 = self.aws_session.session.client('ec2', region_name=self.region)
                 regions = ec2.describe_regions(AllRegions=False).get('Regions', [])
                 for r in regions:
                     coverage[r['RegionName']] = broad_trail
@@ -532,10 +542,9 @@ class PhantomUserScanner:
         from collections import Counter
         region_tally = Counter(e.get('_Region', self.region) for e in all_events)
         if len(region_tally) > 1:
-            click.echo(f"\n{output.bold('Region breakdown:')}")
+            click.echo(f"\n{output.bold('Region breakdown:')} {output.red('\u26a0 multi-region activity')}")
             for region, count in region_tally.most_common():
-                marker = output.red(' \u26a0 multi-region activity') if len(region_tally) > 1 else ''
-                click.echo(f"  {region:14} {count} events{marker}")
+                click.echo(f"  {region:14} {count} events")
 
         output.success("Timeline generation complete")
         output.info("Review events above for suspicious activity\n")
