@@ -1,24 +1,17 @@
-title: Bedrock Bearer Token Used Across Multiple Regions
-id: eb006603-5e96-427b-9d03-e6442f203308
-status: experimental
+title: Bedrock API Key Data-Plane Bearer Call (correlation base)
+id: a344e18c-c8b6-4595-97c1-0dd88e1d13d4
+name: bedrock_bearer_data_plane_call
+status: stable
 description: |
-    Detects the same Bedrock bearer token principal (BedrockAPIKey-* phantom
-    user or service-specific credential ID) issuing InvokeModel /
-    CallWithBearerToken calls across two or more AWS regions within a short
-    window. This is the canonical LLMjacking fan-out pattern: stolen keys
-    are spun up across regions to maximize foundation model throughput
-    before detection.
-
-    This rule is correlation-style; it requires aggregation in your SIEM
-    (Splunk stats by user, Sentinel summarize, etc.). The aws/cloudtrail
-    Sigma backend will emit it as a tabular search.
+    Internal base rule for the cross-region correlation. Matches any
+    InvokeModel-family call authenticated by a Bedrock API key (long-term
+    or short-term), anchored on additionalEventData.callWithBearerToken =
+    true so it works for both key types regardless of userIdentity.userName
+    shape (short-term keys do NOT use BedrockAPIKey-* usernames).
 references:
-    - https://github.com/BeyondTrust/bedrock-keys-security#llmjacking
+    - https://github.com/BeyondTrust/bedrock-keys-security
 author: BeyondTrust Phantom Labs
 date: 2026/04/27
-tags:
-    - attack.impact
-    - attack.t1496
 logsource:
     product: aws
     service: cloudtrail
@@ -31,9 +24,47 @@ detection:
             - Converse
             - ConverseStream
             - CallWithBearerToken
-        userIdentity.userName|startswith: 'BedrockAPIKey-'
-    timeframe: 30m
-    condition: selection | count(awsRegion) by userIdentity.userName > 1
+        additionalEventData.callWithBearerToken: true
+    condition: selection
+level: informational
+---
+title: Bedrock Bearer Token Used Across Multiple Regions
+id: eb006603-5e96-427b-9d03-e6442f203308
+status: experimental
+description: |
+    Detects the same Bedrock bearer principal issuing data-plane calls
+    across two or more AWS regions within 30 minutes. This is the
+    canonical LLMjacking fan-out pattern: stolen keys are spun up across
+    regions to maximize foundation model throughput before detection.
+
+    Anchored on additionalEventData.callWithBearerToken (the universal
+    signal for any Bedrock API key request), so this catches both
+    long-term keys (phantom users) and short-term keys (STS-derived
+    bearer tokens whose userName is the assumed role / session name,
+    not BedrockAPIKey-*). Aggregating by userIdentity.principalId — not
+    userName — is what makes short-term keys visible.
+
+    Modelled as a Sigma 2.x correlation (value_count). Backends that
+    support correlations (Splunk, Elastic Lucene, ESQL, Sentinel KQL)
+    will emit aggregation queries; legacy backends without correlation
+    support will need the original pipe-style fallback.
+references:
+    - https://github.com/BeyondTrust/bedrock-keys-security#llmjacking
+author: BeyondTrust Phantom Labs
+date: 2026/04/27
+tags:
+    - attack.impact
+    - attack.t1496
+correlation:
+    type: value_count
+    rules:
+        - bedrock_bearer_data_plane_call
+    group-by:
+        - userIdentity.principalId
+    timespan: 30m
+    condition:
+        field: awsRegion
+        gte: 2
 falsepositives:
     - Legitimate multi-region deployments. Allowlist known production
       principals or scope by tag.
