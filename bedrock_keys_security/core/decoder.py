@@ -194,9 +194,11 @@ class BedrockKeyDecoder:
                 ),
                 'security_notes': [
                     'Temporary credential with time-limited validity',
-                    'Cannot be revoked (must wait for expiration)',
+                    'Revocable via aws:TokenIssueTime deny policy on the issuing principal '
+                    '(see incident response runbook in README)',
                     'Presigned URL contains AWS credentials',
-                    f'Expires {expires_at if expires_at != "Unknown" else "in " + expires_str + " seconds from creation"}',
+                    f'Expires {expires_at}' if expires_at != 'Unknown'
+                    else 'Expiry: unknown (could not parse presigned URL)',
                 ],
             }
 
@@ -223,3 +225,27 @@ class BedrockKeyDecoder:
                     'bedrock-api-key-... (short-term key)',
                 ],
             }
+
+
+# Fields the decoder may emit that should not appear in CLI / report output.
+# Centralised here so adding a new sensitive field cannot leak silently
+# through every consumer that builds its own redaction list.
+_FIELDS_TO_REMOVE = ('full_decoded', 'presigned_url')
+_FIELDS_TO_REDACT = ('secret_preview', 'credential_hint')
+
+
+def redact_for_display(result: Dict) -> Dict:
+    """Return a copy of a decoder result safe to display or persist.
+
+    Removes plaintext payload fields (full decoded string, presigned URL)
+    and replaces preview-style fields with '[REDACTED]'. The original
+    result dict is not mutated, so library callers that intentionally
+    want the raw output can keep using BedrockKeyDecoder.decode_key().
+    """
+    safe = dict(result)
+    for field in _FIELDS_TO_REMOVE:
+        safe.pop(field, None)
+    for field in _FIELDS_TO_REDACT:
+        if field in safe:
+            safe[field] = '[REDACTED]'
+    return safe
