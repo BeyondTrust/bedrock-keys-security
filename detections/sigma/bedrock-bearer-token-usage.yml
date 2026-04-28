@@ -1,5 +1,5 @@
 title: Bedrock API Key Usage (callWithBearerToken Signal)
-id: 1c4f7a92-6e3d-4581-bedrock-bearer-token-primary
+id: 795a4ee0-e66c-461f-936a-6d95cb505128
 status: stable
 description: |
     Primary detection signal for any Bedrock API key usage. Every long-term

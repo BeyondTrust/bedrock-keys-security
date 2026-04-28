@@ -1,5 +1,5 @@
 title: Phantom IAM User Created (BedrockAPIKey-*)
-id: 6a8d2f31-4e92-4f15-bedrock-phantom-user-create
+id: 1f90157f-a78a-45fc-ab14-ee469a385ee3
 status: stable
 description: |
     Detects creation of an IAM user matching the BedrockAPIKey-* naming

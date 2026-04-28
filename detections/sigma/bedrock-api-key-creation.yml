@@ -1,5 +1,5 @@
 title: AWS Bedrock Long-Term API Key Created
-id: 4d6a3a17-9b6e-4e1f-ab85-bedrock-api-key-create
+id: 65b08c42-6ce2-4803-9ac2-ba6fdb90a564
 status: stable
 description: |
     Detects creation of a Bedrock service-specific credential — a long-term

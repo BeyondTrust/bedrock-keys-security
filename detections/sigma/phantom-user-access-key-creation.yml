@@ -1,5 +1,5 @@
 title: IAM Access Key Created On Bedrock Phantom User
-id: 9c2b91e0-8d5f-4d72-bedrock-phantom-akia-creation
+id: f8fe8f6d-d449-4d4a-a3d8-e136fc812362
 status: stable
 description: |
     Detects creation of an IAM access key (AKIA*) on a phantom user provisioned

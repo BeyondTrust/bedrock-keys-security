@@ -1,5 +1,5 @@
 title: Bedrock API Key Used With Suspicious User Agent
-id: 3b7e9f42-5c81-4d67-bedrock-suspicious-ua
+id: 3549eef7-7b40-4cc7-ac13-f18c1e0585bd
 status: experimental
 description: |
     Detects Bedrock API key usage from generic, scripted, or off-the-shelf
