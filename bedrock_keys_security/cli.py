@@ -4,8 +4,12 @@ import click
 from typing import Optional
 
 from bedrock_keys_security import __version__
+from bedrock_keys_security._version import get_commit
 from bedrock_keys_security.utils.aws import AWSSession
 from bedrock_keys_security.core.scanner import PhantomUserScanner
+
+_commit = get_commit()
+_version_string = f"{__version__} (commit {_commit})" if _commit else __version__
 
 
 class Context:
@@ -33,7 +37,7 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 @click.option('--profile', default=None, help='AWS profile name')
 @click.option('--region', default='us-east-1', help='AWS region (default: us-east-1)')
 @click.option('--verbose', '-v', is_flag=True, help='Enable verbose output')
-@click.version_option(__version__, prog_name='bks')
+@click.version_option(_version_string, prog_name='bks')
 @click.pass_context
 def cli(ctx, profile, region, verbose):
     """Bedrock API Keys Security Toolkit - Discovery, cleanup, incident response, and key decoding"""
