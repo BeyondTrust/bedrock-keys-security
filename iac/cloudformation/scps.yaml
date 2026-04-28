@@ -94,7 +94,7 @@ Resources:
             Resource: '*'
             Condition:
               StringEquals:
-                bedrock:bearerTokenType: LONG_TERM
+                bedrock:BearerTokenType: LONG_TERM
 
   BlockPhantomUserEscalation:
     Type: AWS::Organizations::Policy
