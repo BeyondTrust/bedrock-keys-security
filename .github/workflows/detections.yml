@@ -1,0 +1,50 @@
+name: Detections
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "detections/sigma/**"
+      - ".github/workflows/detections.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "detections/sigma/**"
+      - ".github/workflows/detections.yml"
+
+jobs:
+  sigma:
+    name: Sigma rule round-trip (Splunk SPL)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install sigma-cli and Splunk backend
+        run: python -m pip install --upgrade pip sigma-cli pysigma-backend-splunk
+
+      - name: Convert every Sigma rule to Splunk SPL
+        run: |
+          set -u
+          fail=0
+          for f in detections/sigma/*.yml; do
+            if sigma convert -t splunk --without-pipeline "$f" > /dev/null 2>&1; then
+              echo "OK   $f"
+            else
+              echo "FAIL $f"
+              sigma convert -t splunk --without-pipeline "$f" 2>&1 | sed 's/^/       /' | head -10
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo
+            echo "One or more Sigma rules failed to convert. Fix the rule or backend invocation above."
+            exit 1
+          fi
