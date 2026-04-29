@@ -5,9 +5,14 @@
 #
 # Recommended alarm: result count > 100 per hour (adjust to your baseline).
 #
+# Note on the filter value: CloudTrail-to-CloudWatch-Logs delivery
+# serialises the boolean callWithBearerToken as the string "true", not as
+# a native boolean. The filter therefore compares against "true" (quoted)
+# — `= true` (unquoted) returns zero matches.
+#
 # Reference: https://github.com/BeyondTrust/bedrock-keys-security
 
 fields @timestamp, userIdentity.principalId, sourceIPAddress, eventName, userAgent
-| filter additionalEventData.callWithBearerToken = true
+| filter additionalEventData.callWithBearerToken = "true"
 | stats count() by eventName, userIdentity.principalId
 | sort count desc
