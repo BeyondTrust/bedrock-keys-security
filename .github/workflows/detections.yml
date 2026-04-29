@@ -5,11 +5,13 @@ on:
     branches: ["main"]
     paths:
       - "detections/sigma/**"
+      - "detections/eventbridge/**"
       - ".github/workflows/detections.yml"
   pull_request:
     branches: ["main"]
     paths:
       - "detections/sigma/**"
+      - "detections/eventbridge/**"
       - ".github/workflows/detections.yml"
 
 jobs:
@@ -48,3 +50,40 @@ jobs:
             echo "One or more Sigma rules failed to convert. Fix the rule or backend invocation above."
             exit 1
           fi
+
+  eventbridge:
+    name: EventBridge pattern JSON validity
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+
+      - name: Validate every EventBridge pattern parses and has the expected shape
+        run: |
+          python3 - <<'PY'
+          import json, glob, sys
+          fail = 0
+          for f in sorted(glob.glob("detections/eventbridge/*.json")):
+              try:
+                  d = json.load(open(f))
+              except Exception as e:
+                  print(f"FAIL {f}: invalid JSON: {e}")
+                  fail = 1
+                  continue
+              if "source" not in d:
+                  print(f"FAIL {f}: missing required 'source' field")
+                  fail = 1
+                  continue
+              if "_comment" in d:
+                  print(f"FAIL {f}: AWS rejects top-level '_comment' (must be object/array)")
+                  fail = 1
+                  continue
+              print(f"OK   {f}  source={d['source']}  detail-type={d.get('detail-type')}")
+          sys.exit(fail)
+          PY

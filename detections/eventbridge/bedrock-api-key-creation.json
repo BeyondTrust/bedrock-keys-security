@@ -1,0 +1,11 @@
+{
+  "source": ["aws.iam"],
+  "detail-type": ["AWS API Call via CloudTrail"],
+  "detail": {
+    "eventSource": ["iam.amazonaws.com"],
+    "eventName": ["CreateServiceSpecificCredential"],
+    "requestParameters": {
+      "serviceName": ["bedrock.amazonaws.com"]
+    }
+  }
+}

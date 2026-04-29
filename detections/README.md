@@ -31,9 +31,14 @@ The primary CloudTrail detection signal for any Bedrock API key request is the f
 
 ## EventBridge (`eventbridge/`)
 
-| File | Use |
-|---|---|
-| `bedrock-api-key-usage.json` | Drop-in EventBridge rule pattern for every Bedrock API key request. Route to SNS / Lambda / SIEM via API destinations. Minimum-viable detection if no SIEM is in place yet. |
+All four patterns target the `aws.iam` source (us-east-1, since IAM is global). Bedrock does not emit data-plane (`callWithBearerToken`) events to EventBridge, so EventBridge coverage is anchored on the IAM-side lifecycle of phantom users and their credentials. For runtime usage detection, use the CloudTrail-based rules (Sigma / CloudWatch Insights / Athena) in this directory.
+
+| File | Severity | Detects |
+|---|---|---|
+| `bedrock-api-key-creation.json` | medium | `iam:CreateServiceSpecificCredential` with `serviceName=bedrock.amazonaws.com`. Every match is a new long-term Bedrock key (and therefore a new phantom user). |
+| `phantom-user-creation.json` | medium | `iam:CreateUser` with `userName` prefix `BedrockAPIKey-`. Catches the phantom user provisioning event itself. |
+| `phantom-user-access-key-creation.json` | high | `iam:CreateAccessKey` with `userName` prefix `BedrockAPIKey-`. The privilege-escalation pivot — phantom user gains persistent IAM credentials beyond Bedrock. |
+| `phantom-user-console-login.json` | high | `iam:CreateLoginProfile` / `iam:UpdateLoginProfile` with `userName` prefix `BedrockAPIKey-`. There is no legitimate workflow that gives a phantom user console access; treat any hit as compromise. |
 
 ## CloudWatch Logs Insights (`cloudwatch-insights/`)
 
@@ -45,9 +50,9 @@ The primary CloudTrail detection signal for any Bedrock API key request is the f
 
 | Attack stage | Rule(s) |
 |---|---|
-| Initial creation (long-term key) | `bedrock-api-key-creation.yml`, `phantom-user-creation.yml` |
-| Any API key usage (visibility baseline) | `bedrock-bearer-token-usage.yml`, `bedrock-api-key-usage.json`, `bearer-token-usage.txt` |
-| Persistence pivot (phantom user → AKIA) | `phantom-user-access-key-creation.yml`, `phantom-user-iam-pivot.sql` |
+| Initial creation (long-term key) | `bedrock-api-key-creation.yml`, `phantom-user-creation.yml`, EventBridge `bedrock-api-key-creation.json` + `phantom-user-creation.json` |
+| Any API key usage (visibility baseline) | `bedrock-bearer-token-usage.yml`, `bearer-token-usage.txt` |
+| Persistence pivot (phantom user → AKIA / console) | `phantom-user-access-key-creation.yml`, `phantom-user-iam-pivot.sql`, EventBridge `phantom-user-access-key-creation.json` + `phantom-user-console-login.json` |
 | LLMjacking detection | `bedrock-cross-region-bearer-token-use.yml`, `bedrock-suspicious-user-agent.yml`, `llmjacking-invocation-spike.sql`, `bedrock-bearer-token-cross-region.sql` |
 | Spend / capacity abuse | `bedrock-spend-anomaly.sql` |
 
