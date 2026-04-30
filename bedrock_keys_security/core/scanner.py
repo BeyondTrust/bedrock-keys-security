@@ -402,6 +402,183 @@ class PhantomUserScanner:
             output.error(f"Revocation failed: {e}")
             return False
 
+    def _issuer_matches_caller(self, issuer_arn: str, issuer_kind: str) -> bool:
+        """Return True when the issuer principal is the same one the caller authenticated as.
+
+        Caller arn shapes:
+            arn:aws:sts::A:assumed-role/ROLE/session-name
+            arn:aws:iam::A:user/UserName
+        Issuer arn shapes (from sessionIssuer):
+            arn:aws:iam::A:role/ROLE
+            arn:aws:iam::A:role/aws-reserved/sso.amazonaws.com/ROLE
+            arn:aws:iam::A:user/UserName
+        """
+        caller = self.caller_arn or ''
+        issuer_leaf = issuer_arn.rsplit('/', 1)[-1]
+        if issuer_kind == 'role' and ':assumed-role/' in caller:
+            caller_role = caller.split(':assumed-role/', 1)[1].split('/', 1)[0]
+            return caller_role == issuer_leaf
+        if issuer_kind == 'user' and ':user/' in caller:
+            caller_user = caller.rsplit('/', 1)[-1]
+            return caller_user == issuer_leaf
+        return False
+
+    def _find_short_term_issuer(self, access_key_id: str):
+        """Look up the sessionIssuer (role or user) that minted a given STS access key.
+
+        CloudTrail lookup-events filters by AccessKeyId match the events made BY that
+        access key, not the issuance event. That is exactly what we need: every usage
+        event carries userIdentity.sessionContext.sessionIssuer.arn pointing back at
+        the principal that called sts:AssumeRole / GetSessionToken / etc.
+
+        Returns (arn, name, kind) where kind is 'role' or 'user', or (None, None, None)
+        if no events were found or no sessionIssuer was attached (e.g. the leaked key
+        was never used).
+        """
+        try:
+            paginator = self.cloudtrail.get_paginator('lookup_events')
+            for page in paginator.paginate(
+                LookupAttributes=[{'AttributeKey': 'AccessKeyId', 'AttributeValue': access_key_id}],
+                PaginationConfig={'MaxItems': 5},
+            ):
+                for ev in page.get('Events', []):
+                    ct = json.loads(ev['CloudTrailEvent'])
+                    issuer = (ct.get('userIdentity', {}) or {}).get('sessionContext', {}).get('sessionIssuer', {}) or {}
+                    arn = issuer.get('arn')
+                    if not arn:
+                        continue
+                    name = issuer.get('userName') or arn.rsplit('/', 1)[-1]
+                    kind = 'role' if ':role/' in arn else 'user'
+                    return arn, name, kind
+        except ClientError as e:
+            output.warning(f"CloudTrail lookup failed: {e}")
+        return None, None, None
+
+    def revoke_short_term_key(self, key: str, dry_run: bool = False, force: bool = False) -> bool:
+        """Revoke a short-term Bedrock API key by applying aws:TokenIssueTime deny on the issuing principal.
+
+        Short-term keys are STS bearer tokens. The credential itself can't be deleted
+        (the SSC delete API doesn't apply); the only IR move is to deny every session
+        issued before now on the principal that minted the token.
+
+        Two guards before the policy is applied:
+        - If the issuer is an AWS SSO / Identity Center-managed role
+          (path includes aws-reserved/sso.amazonaws.com or name starts with
+          AWSReservedSSO_), AWS does not allow PutRolePolicy on it. Refused
+          here with a pointer to the right knob (Identity Center permission
+          set / SCP).
+        - If the issuer is the same principal the caller is currently
+          authenticated as, applying the deny would lock the caller out of
+          their own session (and any concurrent ones). Refused unless the
+          caller passes --force.
+        """
+        from bedrock_keys_security.core.decoder import BedrockKeyDecoder
+
+        click.echo(f"\n{click.style('⚠️  EMERGENCY TOKEN REVOCATION (short-term)', fg='red', bold=True)}")
+
+        decoded = BedrockKeyDecoder.decode_short_term_key(key)
+        if 'error' in decoded:
+            output.error(f"Could not decode key: {decoded['error']}")
+            return False
+
+        access_key_id = decoded.get('access_key_id', 'Unknown')
+        account_id = decoded.get('account_id', 'Unknown')
+        region = decoded.get('region', 'Unknown')
+
+        click.echo(output.cyan(f"  Access key: {access_key_id}  account: {account_id}  region: {region}"))
+
+        if not access_key_id.startswith('ASIA'):
+            output.error("Decoded access key isn't an STS temporary credential (expected ASIA*).")
+            return False
+
+        output.info("Looking up issuing principal via CloudTrail...")
+        issuer_arn, issuer_name, issuer_kind = self._find_short_term_issuer(access_key_id)
+        if not issuer_arn:
+            output.error("Could not identify issuing principal in CloudTrail.")
+            output.info("No usage events found for this access key. The key may not have been used yet, "
+                        "or coverage gaps exist. Use CloudTrail Lake / Athena with "
+                        "responseElements.credentials.accessKeyId match to find the issuance event manually.")
+            return False
+
+        click.echo(output.cyan(f"  Issuing principal: {issuer_arn}  ({issuer_kind})"))
+
+        # Guard 1: SSO-managed roles cannot accept PutRolePolicy
+        if issuer_kind == 'role' and (
+            'aws-reserved/sso.amazonaws.com' in issuer_arn
+            or issuer_name.startswith('AWSReservedSSO_')
+        ):
+            output.error("Issuer is an AWS SSO / Identity Center-managed role.")
+            output.info(
+                "AWS does not allow attaching inline policies directly to SSO-managed roles. "
+                "Revoke at the right layer instead: disable / unassign the user in IAM Identity "
+                "Center, edit the permission set's inline policy, or apply an SCP at the org level."
+            )
+            return False
+
+        # Guard 2: self-revoke would lock the caller out of their own session
+        self_revoke = self._issuer_matches_caller(issuer_arn, issuer_kind)
+        if self_revoke:
+            click.echo(output.red(
+                "⚠️  Self-revoke detected: this issuer is the same principal you are authenticated as. "
+                "Applying the deny will kill this bks session and any concurrent sessions using the "
+                "same role/user."
+            ))
+
+        if dry_run:
+            click.echo(output.yellow(
+                f"\n[DRY-RUN] Would apply aws:TokenIssueTime deny on {issuer_kind} '{issuer_name}'"
+            ))
+            return True
+
+        if self_revoke and not force:
+            output.error("Refusing to self-revoke without --force.")
+            output.info("Re-run with --force if you really want to deny your own current session.")
+            return False
+
+        if not force and not click.confirm(
+            click.style(
+                f"This will deny ALL actions for sessions issued before now on {issuer_kind} '{issuer_name}'. Continue?",
+                fg="yellow",
+            ),
+            default=False,
+        ):
+            output.info("Revocation cancelled.")
+            return False
+
+        cutoff = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        policy_name = f"BKS-EmergencyTokenRevocation-{int(datetime.now(timezone.utc).timestamp())}"
+        policy_document = {
+            "Version": "2012-10-17",
+            "Statement": [{
+                "Sid": "DenyAllBeforeCutoff",
+                "Effect": "Deny",
+                "Action": "*",
+                "Resource": "*",
+                "Condition": {"DateLessThan": {"aws:TokenIssueTime": cutoff}},
+            }],
+        }
+
+        try:
+            if issuer_kind == 'role':
+                self.iam.put_role_policy(
+                    RoleName=issuer_name,
+                    PolicyName=policy_name,
+                    PolicyDocument=json.dumps(policy_document),
+                )
+            else:
+                self.iam.put_user_policy(
+                    UserName=issuer_name,
+                    PolicyName=policy_name,
+                    PolicyDocument=json.dumps(policy_document),
+                )
+            output.success(f"Applied TokenIssueTime deny on {issuer_kind} '{issuer_name}': {policy_name}")
+            click.echo(f"\n{click.style('✓ Short-term token revocation complete', fg='green', bold=True)}")
+            click.echo(output.cyan(f"All sessions issued by {issuer_arn} before {cutoff} are now denied.\n"))
+            return True
+        except ClientError as e:
+            output.error(f"Failed to apply deny policy: {e}")
+            return False
+
     def discover_trail_coverage(self) -> Dict[str, str]:
         """Map enabled AWS regions to the CloudTrail trail covering them.
 
