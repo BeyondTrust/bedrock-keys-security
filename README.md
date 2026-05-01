@@ -268,8 +268,8 @@ API keys may still be necessary for legacy applications hardcoded for bearer tok
 
 ## Talks
 
-- **BSides Seattle 2026**: [slides](docs/bsides-seattle-2026.pdf)
-- **RootedCON Madrid**: *Phantom IAM Users in AWS Bedrock*
+- **BSides Seattle 2026**: *The Phantom of the Infrastructure: Investigating the Hidden IAM Risks in Bedrock API Keys* ([slides](docs/bsides-seattle-2026.pdf), [video](https://www.youtube.com/watch?v=v3wvjb9Gu-c))
+- **RootedCON Madrid 2026**: *The Phantom of the Infrastructure: The Invisible Threat in Bedrock API Keys*
 
 ## Contributing
 
