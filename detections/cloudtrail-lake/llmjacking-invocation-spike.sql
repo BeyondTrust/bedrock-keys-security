@@ -7,7 +7,7 @@
 --
 -- Anchored on additionalEventData.callWithBearerToken (the universal
 -- signal for any Bedrock API key request) and grouped by
--- userIdentity.principalId — not userName — so short-term keys are
+-- userIdentity.principalId (not userName), so short-term keys are
 -- visible. Short-term keys do not use BedrockAPIKey-* usernames; their
 -- userName is the assumed-role / session name.
 --

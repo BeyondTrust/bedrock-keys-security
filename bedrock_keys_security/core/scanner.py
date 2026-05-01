@@ -19,7 +19,7 @@ SCAN_MAX_WORKERS = 10
 
 
 def _json_default(obj):
-    """Fallback serializer for json.dumps — handles datetime fields returned by AWS APIs"""
+    """Fallback serializer for json.dumps. Handles datetime fields returned by AWS APIs."""
     if isinstance(obj, datetime):
         return obj.isoformat()
     raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
@@ -45,7 +45,7 @@ class PhantomUserScanner:
         if self.verbose:
             output.info("Scanning for phantom IAM users...")
 
-        # Phase 1: list users (paginated, sequential — single API call stream)
+        # Phase 1: list users (paginated, sequential, single API call stream)
         bare_users: List[Dict] = []
         try:
             paginator = self.iam.get_paginator('list_users')
@@ -821,7 +821,7 @@ class PhantomUserScanner:
         """Generate report header with context for first-time users"""
         lines = []
         lines.append(f"\n{output.bold('─' * 60)}")
-        lines.append(f"{output.bold(output.cyan('  bks — Bedrock Keys Security'))}")
+        lines.append(f"{output.bold(output.cyan('  bks: Bedrock Keys Security'))}")
         lines.append(f"{output.bold('─' * 60)}")
         lines.append("")
         lines.append("  Scans AWS accounts for phantom IAM users")

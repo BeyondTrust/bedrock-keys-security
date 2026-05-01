@@ -1,4 +1,4 @@
-# Terraform — Bedrock API key SCPs
+# Terraform: Bedrock API key SCPs
 
 Terraform module that mirrors the four JSON SCPs in `scps/` as
 `aws_organizations_policy` resources, ready to attach to OUs.

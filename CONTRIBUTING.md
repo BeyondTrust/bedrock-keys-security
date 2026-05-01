@@ -1,7 +1,7 @@
 # Contributing
 
 Pull requests welcome. This guide walks through the full workflow, including
-the repo's signing and review requirements — read it before submitting your
+the repo's signing and review requirements; read it before submitting your
 first PR.
 
 ## Setup
@@ -24,7 +24,7 @@ The `main` branch is protected by a Repository ruleset. Your PR will be
 | **Required signatures** | Every commit you push must be cryptographically signed (GPG or SSH). Unsigned commits will block the merge regardless of approvals. |
 | **2 approving reviews** | At least two reviewers must approve the latest pushed commit. |
 | **Code-owner review** | A member of `@beyondtrust/research` must be one of the approvers. |
-| **Linear history** | No merge commits in the PR branch — rebase, don't merge from upstream. |
+| **Linear history** | No merge commits in the PR branch. Rebase, don't merge from upstream. |
 | **Squash merge only** | The PR is squashed into a single commit on `main` at merge time. |
 | **CodeQL must pass** | The Python and Actions analysis workflows must complete with no high-severity alerts. |
 | **Stale review dismissal** | Force-pushing dismisses prior approvals; reviewers must re-approve the new HEAD. |
@@ -33,7 +33,7 @@ The `main` branch is protected by a Repository ruleset. Your PR will be
 ## Set up commit signing
 
 If you have not signed commits before, this is the one-time setup. Pick GPG
-or SSH — both are accepted.
+or SSH; both are accepted.
 
 ### Option A: GPG
 
@@ -94,7 +94,7 @@ git add path/to/file
 git commit -S -m "Short imperative subject (under 70 chars)
 
 Longer body explaining the *why*. Wrap at 72 columns. The why matters
-more than the what — reviewers can read the diff for what changed."
+more than the what; reviewers can read the diff for what changed."
 
 # 4. Run the smoke checks before pushing
 python3 -c "import py_compile, os; [py_compile.compile(os.path.join(r,f), doraise=True) for r,_,fs in os.walk('bedrock_keys_security') for f in fs if f.endswith('.py')]"
@@ -111,7 +111,7 @@ gh pr create --repo BeyondTrust/bedrock-keys-security --base main --web
 Amend or add commits, **always signed**, then force-push:
 
 ```bash
-# Add a new commit (preferred for contributors — clear review history)
+# Add a new commit (preferred for contributors: clear review history)
 git commit -S -m "Address review feedback: rename foo to bar"
 git push origin fix/short-description
 
@@ -122,7 +122,7 @@ git rebase --exec 'git commit --amend --no-edit -S' upstream/main
 git push --force-with-lease origin fix/short-description
 ```
 
-`--force-with-lease` is safer than `--force` — it fails if anyone else pushed
+`--force-with-lease` is safer than `--force`. It fails if anyone else pushed
 to the branch since your last fetch.
 
 ### If a maintainer rebases or signs your branch
@@ -142,7 +142,7 @@ git reset --hard origin/<your-branch-name>
 ```
 Subject line in imperative mood, under 70 chars
 
-Body explains why this change is needed — the constraint, incident, or
+Body explains why this change is needed: the constraint, incident, or
 rationale that prompted it. Reference issues with #N. Wrap at 72 cols.
 ```
 
@@ -164,13 +164,13 @@ rationale that prompted it. Reference issues with #N. Wrap at 72 cols.
 
 ## Code style
 
-- Python 3.10+. The `publish` workflow runs on 3.11 — **avoid f-string
+- Python 3.10+. The `publish` workflow runs on 3.11. **Avoid f-string
   features that require PEP 701 (Python 3.12+)**, in particular re-using
   the same quote character inside an f-string expression. Extract a
   variable instead:
 
   ```python
-  # Bad on 3.10/3.11 — same quote nested:
+  # Bad on 3.10/3.11 (same quote nested):
   f"{f'{"yes" if cond else "no"}'}"
 
   # Good:
@@ -213,14 +213,14 @@ development. Use `--dry-run` to preview, or a sandbox account.
 
 - **No real AWS account IDs in commits.** Use `123456789012` or
   `886000970552`-style placeholders only if they're publicly safe.
-- **No real credentials.** Even in tests or examples — every public ABSK key
+- **No real credentials.** Even in tests or examples; every public ABSK key
   in this repo's history would be flagged by AWS GuardDuty within minutes.
 - **No customer or internal incident data.** If you have real incident data
   to share, sanitize first or redirect to a private channel.
 
 ## Need help?
 
-- [GitHub Issues](https://github.com/BeyondTrust/bedrock-keys-security/issues) — bugs and feature requests
+- [GitHub Issues](https://github.com/BeyondTrust/bedrock-keys-security/issues): bugs and feature requests
 - Twitter: [@btphantomlabs](https://x.com/btphantomlabs)
 
 ## License

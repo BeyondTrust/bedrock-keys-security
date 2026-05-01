@@ -143,7 +143,7 @@ bks report BedrockAPIKey-xxxx                     # full incident report
 bks report BedrockAPIKey-xxxx --output report.txt
 ```
 
-`revoke-key` applies an inline `Deny: bedrock:*` policy, deletes all Bedrock service-specific credentials, and disables IAM access keys (`AKIA*`) on the phantom user — closing the privilege-escalation pivot in the same operation.
+`revoke-key` applies an inline `Deny: bedrock:*` policy, deletes all Bedrock service-specific credentials, and disables IAM access keys (`AKIA*`) on the phantom user, closing the privilege-escalation pivot in the same operation.
 
 `timeline --all-regions` is recommended whenever LLMjacking is suspected. It runs `cloudtrail:DescribeTrails` to map coverage, enumerates enabled regions via `ec2:DescribeRegions`, and fans the lookup out across every region with an active trail. Bedrock data-plane events (`InvokeModel`, `Converse`, `CallWithBearerToken`) are recorded in the region where Bedrock was called, so a single-region timeline misses cross-region fan-out by design.
 
@@ -215,10 +215,10 @@ aws organizations create-policy \
 
 The same four SCPs are available as ready-to-deploy modules:
 
-- **Terraform** — [`iac/terraform/`](iac/terraform/): `aws_organizations_policy` resources with optional OU attachment. Reads policy bodies from `scps/*.json` so the module and the JSON cannot drift.
-- **CloudFormation** — [`iac/cloudformation/scps.yaml`](iac/cloudformation/scps.yaml): single template with conditional resources, StackSet-friendly.
+- **Terraform**: [`iac/terraform/`](iac/terraform/) wraps the four SCPs as `aws_organizations_policy` resources with optional OU attachment. Reads policy bodies from `scps/*.json` so the module and the JSON cannot drift.
+- **CloudFormation**: [`iac/cloudformation/scps.yaml`](iac/cloudformation/scps.yaml) is a single template with conditional resources, StackSet-friendly.
 
-Both default to enabling `Block-Bedrock-API-Keys` plus `Block-Phantom-User-Escalation` — the recommended baseline pair.
+Both default to enabling `Block-Bedrock-API-Keys` plus `Block-Phantom-User-Escalation`, the recommended baseline pair.
 
 ## Detection Content
 
@@ -268,8 +268,8 @@ API keys may still be necessary for legacy applications hardcoded for bearer tok
 
 ## Talks
 
-- **BSides Seattle 2026** — [slides](docs/bsides-seattle-2026.pdf)
-- **RootedCON Madrid** — *Phantom IAM Users in AWS Bedrock*
+- **BSides Seattle 2026**: [slides](docs/bsides-seattle-2026.pdf)
+- **RootedCON Madrid**: *Phantom IAM Users in AWS Bedrock*
 
 ## Contributing
 

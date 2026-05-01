@@ -2,17 +2,17 @@
 
 Detection rules and copy-paste deployment templates for Bedrock API key abuse and the phantom IAM user attack chain. Each file is independently usable: drop into your SIEM / EventBridge / CloudWatch Insights / CloudTrail Lake / Athena directly.
 
-The primary CloudTrail detection signal for any Bedrock API key request is the field `additionalEventData.callWithBearerToken = true` — present for both long-term and short-term keys, absent from standard SigV4 requests.
+The primary CloudTrail detection signal for any Bedrock API key request is the field `additionalEventData.callWithBearerToken = true`. Present for both long-term and short-term keys, absent from standard SigV4 requests.
 
 ## Sigma rules (`sigma/`)
 
 | File | Severity | Detects |
 |---|---|---|
-| `bedrock-bearer-token-usage.yml` | low | **Primary signal.** Any Bedrock API key request (`callWithBearerToken = true`). Foundation rule — layer higher-confidence rules on top. |
+| `bedrock-bearer-token-usage.yml` | low | **Primary signal.** Any Bedrock API key request (`callWithBearerToken = true`). Foundation rule; layer higher-confidence rules on top. |
 | `bedrock-api-key-creation.yml` | medium | `iam:CreateServiceSpecificCredential` for `bedrock.amazonaws.com` (a new long-term ABSK key was generated). |
 | `phantom-user-creation.yml` | medium | `iam:CreateUser` where `userName` starts with `BedrockAPIKey-` (Console-based provisioning sequence). |
-| `phantom-user-access-key-creation.yml` | high | `iam:CreateAccessKey` on a `BedrockAPIKey-*` user — the documented privilege-escalation pivot. |
-| `bedrock-cross-region-bearer-token-use.yml` | high | Same bearer principal calling Bedrock from 2+ regions in 30 min — LLMjacking fan-out. |
+| `phantom-user-access-key-creation.yml` | high | `iam:CreateAccessKey` on a `BedrockAPIKey-*` user; the documented privilege-escalation pivot. |
+| `bedrock-cross-region-bearer-token-use.yml` | high | Same bearer principal calling Bedrock from 2+ regions in 30 min (LLMjacking fan-out). |
 | `bedrock-suspicious-user-agent.yml` | high | Bearer-token Bedrock calls with non-SDK clients (`python-requests`, `aiohttp`, `curl`). |
 
 ## CloudTrail Lake (`cloudtrail-lake/`)
@@ -37,7 +37,7 @@ All four patterns target the `aws.iam` source (us-east-1, since IAM is global). 
 |---|---|---|
 | `bedrock-api-key-creation.json` | medium | `iam:CreateServiceSpecificCredential` with `serviceName=bedrock.amazonaws.com`. Every match is a new long-term Bedrock key (and therefore a new phantom user). |
 | `phantom-user-creation.json` | medium | `iam:CreateUser` with `userName` prefix `BedrockAPIKey-`. Catches the phantom user provisioning event itself. |
-| `phantom-user-access-key-creation.json` | high | `iam:CreateAccessKey` with `userName` prefix `BedrockAPIKey-`. The privilege-escalation pivot — phantom user gains persistent IAM credentials beyond Bedrock. |
+| `phantom-user-access-key-creation.json` | high | `iam:CreateAccessKey` with `userName` prefix `BedrockAPIKey-`. The privilege-escalation pivot: phantom user gains persistent IAM credentials beyond Bedrock. |
 | `phantom-user-console-login.json` | high | `iam:CreateLoginProfile` / `iam:UpdateLoginProfile` with `userName` prefix `BedrockAPIKey-`. There is no legitimate workflow that gives a phantom user console access; treat any hit as compromise. |
 
 ## CloudWatch Logs Insights (`cloudwatch-insights/`)

@@ -1,4 +1,4 @@
-# CloudWatch Logs Insights — Bedrock API key usage breakdown.
+# CloudWatch Logs Insights: Bedrock API key usage breakdown.
 #
 # Run against your CloudTrail log group. Returns per-principal call counts
 # so you can establish a baseline before tuning higher-precision rules.
@@ -8,7 +8,7 @@
 # Note on the filter value: CloudTrail-to-CloudWatch-Logs delivery
 # serialises the boolean callWithBearerToken as the string "true", not as
 # a native boolean. The filter therefore compares against "true" (quoted)
-# — `= true` (unquoted) returns zero matches.
+# `= true` (unquoted) returns zero matches.
 #
 # Reference: https://github.com/BeyondTrust/bedrock-keys-security
 

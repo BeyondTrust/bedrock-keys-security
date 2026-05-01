@@ -1,4 +1,4 @@
--- Phantom user IAM access key creation — privilege escalation pivot.
+-- Phantom user IAM access key creation (privilege escalation pivot).
 --
 -- An attacker who can call iam:CreateAccessKey on a BedrockAPIKey-* phantom
 -- user inherits the user's bedrock:*, iam:ListRoles, kms:DescribeKey,

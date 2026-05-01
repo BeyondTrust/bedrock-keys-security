@@ -9,7 +9,7 @@ description: |
     aiohttp, or curl with default user agents.
 
     This is a high-precision filter when combined with the callWithBearerToken
-    signal. Tune the regex to your environment — some legitimate tooling
+    signal. Tune the regex to your environment; some legitimate tooling
     (Lambda runtimes, custom integrations) may match.
 references:
     - https://sysdig.com/blog/growing-dangers-of-llmjacking

@@ -17,11 +17,11 @@ def revoke_key(ctx, profile, region, username_or_key, dry_run, force):
     """Emergency revocation of Bedrock API key.
 
     Accepts:
-    - A phantom IAM username (BedrockAPIKey-xxxx) — runs the long-term flow
+    - A phantom IAM username (BedrockAPIKey-xxxx): runs the long-term flow
       (deny policy + delete SSCs + disable AKIAs).
-    - A long-term ABSK key string — decoded offline to its phantom username,
+    - A long-term ABSK key string: decoded offline to its phantom username,
       then the same long-term flow.
-    - A short-term bedrock-api-key-* string — decodes the embedded STS access
+    - A short-term bedrock-api-key-* string: decodes the embedded STS access
       key, finds the issuing principal in CloudTrail, applies an
       aws:TokenIssueTime deny on that principal.
     """

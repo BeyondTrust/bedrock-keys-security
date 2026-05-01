@@ -84,7 +84,7 @@ class BedrockKeyDecoder:
             ]
             if key_position == 'secondary':
                 security_notes.append(
-                    'Secondary key (+N marker present) — phantom user has at least 2 active ABSK credentials'
+                    'Secondary key (+N marker present): phantom user has at least 2 active ABSK credentials'
                 )
 
             return {

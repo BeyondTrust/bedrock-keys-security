@@ -41,8 +41,8 @@ description: |
     signal for any Bedrock API key request), so this catches both
     long-term keys (phantom users) and short-term keys (STS-derived
     bearer tokens whose userName is the assumed role / session name,
-    not BedrockAPIKey-*). Aggregating by userIdentity.principalId — not
-    userName — is what makes short-term keys visible.
+    not BedrockAPIKey-*). Aggregating by userIdentity.principalId (not
+    userName) is what makes short-term keys visible.
 
     Modelled as a Sigma 2.x correlation (value_count). Backends that
     support correlations (Splunk, Elastic Lucene, ESQL, Sentinel KQL)

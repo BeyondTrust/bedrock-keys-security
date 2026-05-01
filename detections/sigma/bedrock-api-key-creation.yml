@@ -2,8 +2,8 @@ title: AWS Bedrock Long-Term API Key Created
 id: 65b08c42-6ce2-4803-9ac2-ba6fdb90a564
 status: stable
 description: |
-    Detects creation of a Bedrock service-specific credential — a long-term
-    ABSK API key. Each creation also silently provisions a phantom IAM user
+    Detects creation of a Bedrock service-specific credential (a long-term
+    ABSK API key). Each creation also silently provisions a phantom IAM user
     named BedrockAPIKey-<id> with the AmazonBedrockLimitedAccess managed
     policy attached.
 references:
