@@ -31,7 +31,7 @@ The primary CloudTrail detection signal for any Bedrock API key request is the f
 
 ## EventBridge (`eventbridge/`)
 
-Five patterns. `bedrock-api-key-usage.json` targets `aws.bedrock` and catches every Bedrock API call authenticated with a bearer token (the runtime visibility baseline, mirrors the Sigma `bedrock-bearer-token-usage.yml`). The other four target `aws.iam` (us-east-1 since IAM is global) and cover the lifecycle of phantom users and their credentials. CloudTrail must be delivering management events to EventBridge for any of these to fire — verify with an active multi-region trail.
+Five patterns. `bedrock-api-key-usage.json` targets `aws.bedrock` and catches every Bedrock API call authenticated with a bearer token (the runtime visibility baseline, mirrors the Sigma `bedrock-bearer-token-usage.yml`). The other four target `aws.iam` (us-east-1 since IAM is global) and cover the lifecycle of phantom users and their credentials. CloudTrail must be delivering management events to EventBridge for any of these to fire. Verify with an active multi-region trail.
 
 | File | Severity | Detects |
 |---|---|---|

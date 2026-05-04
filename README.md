@@ -291,5 +291,5 @@ Apache 2.0. See [LICENSE](LICENSE).
 - [AWS Bedrock API Keys User Guide](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html)
 - [AWS Security Blog: Securing Bedrock API Keys](https://aws.amazon.com/blogs/security/securing-amazon-bedrock-api-keys-best-practices-for-implementation-and-management/)
 - [AWS SCP Examples for Bedrock](https://github.com/aws-samples/service-control-policy-examples/tree/main/Service-specific-controls/Amazon-Bedrock)
-- [AWS Customer Playbook Framework — Bedrock EventBridge CFN](https://github.com/aws-samples/aws-customer-playbook-framework/tree/main/detections/cfn)
+- [AWS Customer Playbook Framework: Bedrock EventBridge CFN](https://github.com/aws-samples/aws-customer-playbook-framework/tree/main/detections/cfn)
 - [CloudTrail Logging for Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/logging-using-cloudtrail.html)
