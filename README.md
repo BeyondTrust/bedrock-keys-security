@@ -1,6 +1,8 @@
 # Bedrock API Keys Security
 
-Security toolkit for AWS Bedrock API keys. Discover phantom IAM users, decode leaked keys, automate cleanup, and enforce preventive controls.
+**Find and contain phantom IAM users from Bedrock keys.**
+
+Security toolkit for AWS Bedrock API keys: phantom user discovery, offline key decoder, incident response, automated cleanup, and preventive SCPs.
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
