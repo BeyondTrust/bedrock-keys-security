@@ -211,8 +211,8 @@ development. Use `--dry-run` to preview, or a sandbox account.
 
 ## Sensitive data hygiene
 
-- **No real AWS account IDs in commits.** Use `123456789012` or
-  `886000970552`-style placeholders only if they're publicly safe.
+- **No real AWS account IDs in commits.** Use `123456789012`-style
+  placeholders.
 - **No real credentials.** Even in tests or examples; every public ABSK key
   in this repo's history would be flagged by AWS GuardDuty within minutes.
 - **No customer or internal incident data.** If you have real incident data
