@@ -229,7 +229,7 @@ SOC-grade detection rules for the full attack chain are in [`detections/`](detec
 | Sigma (6 rules) | Bearer token usage baseline, long-term key creation, phantom-user creation, phantom-user AKIA escalation, cross-region bearer token fan-out, suspicious user-agent invocation |
 | CloudTrail Lake (2 queries) | Per-principal invocation rate spikes, IAM pivot detection |
 | Athena (2 queries) | Cross-region bearer token reuse, top-N principals by InvokeModel count |
-| EventBridge (4 patterns) | Real-time alerts on Bedrock key creation, phantom user creation, AKIA escalation, and console-login pivot |
+| EventBridge (5 patterns) | Real-time alerts on bearer-token usage (visibility baseline), Bedrock key creation, phantom user creation, AKIA escalation, and console-login pivot |
 | CloudWatch Insights (1 query) | Per-principal usage breakdown for native AWS monitoring |
 
 ## Recommended Alternative: STS Temporary Credentials

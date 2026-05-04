@@ -1,0 +1,9 @@
+{
+  "source": ["aws.bedrock"],
+  "detail-type": ["AWS API Call via CloudTrail"],
+  "detail": {
+    "additionalEventData": {
+      "callWithBearerToken": [true]
+    }
+  }
+}
