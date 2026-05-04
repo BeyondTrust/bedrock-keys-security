@@ -27,38 +27,60 @@ def _redraw_spinner():
         sys.stderr.flush()
 
 
+_quiet_mode = False
+
+
+def set_quiet(value: bool) -> None:
+    """Toggle --quiet output suppression.
+
+    Suppresses info / success / warning / high_risk so SOAR pipelines
+    that pipe `bks` get clean stdout. Errors keep flowing to stderr;
+    they always matter regardless of quiet mode.
+    """
+    global _quiet_mode
+    _quiet_mode = value
+
+
 def info(msg: str) -> None:
+    if _quiet_mode:
+        return
     with _spinner_lock:
         _clear_spinner_line()
-        click.echo(click.style(f"[INFO] {msg}", fg="cyan"))
+        click.echo(click.style(f"▸ {msg}", fg="cyan"))
         _redraw_spinner()
 
 
 def success(msg: str) -> None:
+    if _quiet_mode:
+        return
     with _spinner_lock:
         _clear_spinner_line()
-        click.echo(click.style(f"[SUCCESS] {msg}", fg="green"))
+        click.echo(click.style(f"✓ {msg}", fg="green"))
         _redraw_spinner()
 
 
 def warning(msg: str) -> None:
+    if _quiet_mode:
+        return
     with _spinner_lock:
         _clear_spinner_line()
-        click.echo(click.style(f"[WARNING] {msg}", fg="yellow"))
+        click.echo(click.style(f"⚠ {msg}", fg="yellow"))
         _redraw_spinner()
 
 
 def error(msg: str) -> None:
     with _spinner_lock:
         _clear_spinner_line()
-        click.echo(click.style(f"[ERROR] {msg}", fg="red"), err=True)
+        click.echo(click.style(f"✗ {msg}", fg="red"), err=True)
         _redraw_spinner()
 
 
 def high_risk(msg: str) -> None:
+    if _quiet_mode:
+        return
     with _spinner_lock:
         _clear_spinner_line()
-        click.echo(click.style(f"[HIGH RISK] {msg}", fg="red"))
+        click.echo(click.style(f"⚠ {msg}", fg="red", bold=True))
         _redraw_spinner()
 
 

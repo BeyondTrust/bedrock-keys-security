@@ -2,9 +2,10 @@
 
 import sys
 import boto3
-import click
 from typing import Optional
 from botocore.exceptions import ClientError, NoCredentialsError
+
+from bedrock_keys_security.utils import output
 
 
 class AWSSession:
@@ -25,12 +26,12 @@ class AWSSession:
             self.caller_arn = identity["Arn"]
 
             if verbose:
-                click.echo(click.style(f"[INFO] Connected to AWS Account: {self.account_id}", fg="cyan"))
-                click.echo(click.style(f"[INFO] Caller Identity: {self.caller_arn}", fg="cyan"))
+                output.info(f"Connected to AWS Account: {self.account_id}")
+                output.info(f"Caller Identity: {self.caller_arn}")
 
         except NoCredentialsError:
-            click.echo(click.style("[ERROR] No AWS credentials found. Please configure AWS CLI or set environment variables.", fg="red"), err=True)
+            output.error("No AWS credentials found. Configure AWS CLI or set environment variables.")
             sys.exit(1)
         except ClientError as e:
-            click.echo(click.style(f"[ERROR] Failed to initialize AWS session: {e}", fg="red"), err=True)
+            output.error(f"Failed to initialize AWS session: {e}")
             sys.exit(1)

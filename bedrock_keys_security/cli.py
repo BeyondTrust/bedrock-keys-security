@@ -5,6 +5,7 @@ from typing import Optional
 
 from bedrock_keys_security import __version__
 from bedrock_keys_security._version import get_commit
+from bedrock_keys_security.utils import output
 from bedrock_keys_security.utils.aws import AWSSession
 from bedrock_keys_security.core.scanner import PhantomUserScanner
 
@@ -19,6 +20,7 @@ class Context:
         self.profile: Optional[str] = None
         self.region: str = "us-east-1"
         self.verbose: bool = False
+        self.quiet: bool = False
         self._scanner: Optional[PhantomUserScanner] = None
 
     @property
@@ -37,9 +39,12 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 @click.option('--profile', default=None, help='AWS profile name')
 @click.option('--region', default='us-east-1', help='AWS region (default: us-east-1)')
 @click.option('--verbose', '-v', is_flag=True, help='Enable verbose output')
+@click.option('--quiet', '-q', is_flag=True,
+              help='Suppress info / success / warning logs. Errors still go to stderr; '
+                   'final structured output (tables, JSON, reports) still prints. Useful for SOAR pipelines.')
 @click.version_option(_version_string, prog_name='bks')
 @click.pass_context
-def cli(ctx, profile, region, verbose):
+def cli(ctx, profile, region, verbose, quiet):
     """Bedrock API Keys Security Toolkit (BKS).
 
     Scans for phantom IAM users (BedrockAPIKey-*) silently provisioned when
@@ -53,6 +58,9 @@ def cli(ctx, profile, region, verbose):
     ctx.obj.profile = profile
     ctx.obj.region = region
     ctx.obj.verbose = verbose
+    ctx.obj.quiet = quiet
+    if quiet:
+        output.set_quiet(True)
 
     # Default to 'scan' when no subcommand given
     if ctx.invoked_subcommand is None:

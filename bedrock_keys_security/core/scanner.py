@@ -41,16 +41,24 @@ class PhantomUserScanner:
         self.region = aws_session.region
 
     def find_phantom_users(self) -> List[Dict]:
-        """Find all IAM users starting with 'BedrockAPIKey-' and enrich them in parallel"""
+        """Find all IAM users starting with 'BedrockAPIKey-' and enrich them in parallel.
+
+        Sets ``self.last_users_scanned`` to the total number of IAM users
+        iterated (not just phantom matches), so the scan command can
+        print a "scanned N users, found M phantoms" completion line.
+        """
         if self.verbose:
             output.info("Scanning for phantom IAM users...")
 
         # Phase 1: list users (paginated, sequential, single API call stream)
         bare_users: List[Dict] = []
+        total_users_scanned = 0
         try:
             paginator = self.iam.get_paginator('list_users')
             for page in paginator.paginate():
-                for user in page['Users']:
+                page_users = page['Users']
+                total_users_scanned += len(page_users)
+                for user in page_users:
                     username = user['UserName']
                     if username.startswith('BedrockAPIKey-'):
                         if self.verbose:
@@ -65,6 +73,7 @@ class PhantomUserScanner:
         except ClientError as e:
             output.error(f"Failed to list IAM users: {e}")
             sys.exit(1)
+        self.last_users_scanned = total_users_scanned
 
         # Phase 2: enrich each user with 3 IAM calls in parallel.
         # boto3 clients are thread-safe at the request level (each request
