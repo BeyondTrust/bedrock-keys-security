@@ -824,10 +824,10 @@ class PhantomUserScanner:
         lines.append(f"{output.bold(output.cyan('  bks: Bedrock Keys Security'))}")
         lines.append(f"{output.bold('─' * 60)}")
         lines.append("")
-        lines.append("  Scans AWS accounts for phantom IAM users")
-        lines.append("  (BedrockAPIKey-*) created silently by Bedrock")
-        lines.append("  API keys. They outlive the key and inherit")
-        lines.append("  admin-level Bedrock + IAM/EC2/KMS permissions.")
+        lines.append("  Scans for phantom IAM users (BedrockAPIKey-*)")
+        lines.append("  silently provisioned when long-term keys are")
+        lines.append("  generated via the Console. They persist with")
+        lines.append("  admin-level Bedrock + IAM/VPC/KMS permissions.")
         lines.append("")
         lines.append(f"  Docs: {output.cyan('https://github.com/BeyondTrust/bedrock-keys-security')}")
         lines.append(f"{output.bold('─' * 60)}")
@@ -846,25 +846,39 @@ class PhantomUserScanner:
         lines.append(f"  At Risk: {output.red(str(at_risk))} (IAM access keys found)")
 
         if at_risk > 0:
-            lines.append(f"\n{click.style('AT RISK users detected:', fg='red', bold=True)}")
-            lines.append(output.red("These phantom users have IAM access keys (AKIA...) attached. Through the"))
-            lines.append(output.red("AmazonBedrockLimitedAccess policy these keys inherit 47 bedrock: actions"))
-            lines.append(output.red("(full Create/Delete/Update/Invoke lifecycle including DeleteGuardrail,"))
-            lines.append(output.red("DeleteCustomModel, DeleteProvisionedModelThroughput) plus cross-service"))
-            lines.append(output.red("reconnaissance: iam:ListRoles, ec2:DescribeVpcs, ec2:DescribeSubnets,"))
-            lines.append(output.red("ec2:DescribeSecurityGroups, kms:DescribeKey. They persist even if the"))
-            lines.append(output.red("API key is revoked. Investigate:"))
+            user_word = "phantom user" if at_risk == 1 else "phantom users"
+            header = click.style(
+                f"⚠ AT RISK · {at_risk} {user_word} with persistent IAM credentials",
+                fg='red',
+                bold=True,
+            )
+            lines.append(f"\n{header}")
             for user in phantoms:
                 if user['status'] == 'AT RISK':
                     n = user['active_access_keys']
                     key_label = "access key" if n == 1 else "access keys"
-                    lines.append(output.red(f"    - {user['username']} ({n} {key_label})"))
+                    lines.append(output.red(f"   - {user['username']}  ({n} {key_label})"))
+            lines.append("")
+            lines.append(output.red("   These keys inherit Bedrock admin + IAM/VPC/KMS reconnaissance from"))
+            lines.append(output.red("   AmazonBedrockLimitedAccess, and persist after Bedrock key revocation."))
+            lines.append("")
+            lines.append(f"   {output.cyan('→')} bks revoke-key {output.cyan('<username>')}   emergency containment")
+            lines.append(f"   {output.cyan('→')} bks report     {output.cyan('<username>')}   forensic report")
             lines.append("")
 
         if orphaned > 0:
-            lines.append(f"\n{output.yellow(f'{orphaned} orphaned phantom users can be cleaned up.')}")
-            lines.append(output.yellow("These users have no active credentials and can be safely deleted to reduce your attack surface."))
-            lines.append(output.yellow("Run: bks cleanup --dry-run  to preview, or cleanup to delete."))
+            user_word = "phantom user" if orphaned == 1 else "phantom users"
+            header = click.style(
+                f"ORPHANED · {orphaned} {user_word} with no active credentials",
+                fg='yellow',
+                bold=True,
+            )
+            lines.append(f"\n{header}")
+            lines.append(output.yellow("   These accumulate over time as privilege-escalation pivots. Cleanup"))
+            lines.append(output.yellow("   shrinks the attack surface; no live workflow is affected."))
+            lines.append("")
+            lines.append(f"   {output.cyan('→')} bks cleanup --dry-run   preview deletions")
+            lines.append(f"   {output.cyan('→')} bks cleanup             delete with confirmation")
             lines.append("")
 
         return lines

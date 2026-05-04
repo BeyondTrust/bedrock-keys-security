@@ -3,9 +3,15 @@ id: 65b08c42-6ce2-4803-9ac2-ba6fdb90a564
 status: stable
 description: |
     Detects creation of a Bedrock service-specific credential (a long-term
-    ABSK API key). Each creation also silently provisions a phantom IAM user
-    named BedrockAPIKey-<id> with the AmazonBedrockLimitedAccess managed
-    policy attached.
+    ABSK API key). When triggered through the AWS Console, this is part of
+    a silent three-event provisioning sequence (CreateUser,
+    AttachUserPolicy, CreateServiceSpecificCredential) that creates a new
+    BedrockAPIKey-<id> phantom IAM user with the AmazonBedrockLimitedAccess
+    managed policy attached. When triggered via CLI/SDK on an existing
+    user, no phantom is provisioned (the user must already exist); a
+    second SSC on the same phantom (the +1 secondary key) is also captured.
+    Pair with phantom-user-creation.yml to distinguish Console-driven
+    provisioning from CLI/SDK key generation on an existing user.
 references:
     - https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html
     - https://github.com/BeyondTrust/bedrock-keys-security
