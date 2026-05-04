@@ -161,7 +161,6 @@ def format_decode_table_output(result: Dict) -> str:
         lines.append(f"  Secret Preview:  {result.get('secret_preview', 'N/A')}")
         lines.append(f"  Secret Length:   {result.get('secret_length', 'N/A')} chars")
         lines.append(f"  Secret SHA-256:  {result.get('secret_sha256_16', 'N/A')} (first 16 hex)")
-        lines.append(f"  Format:          {result.get('format', 'N/A')}")
 
     elif key_type == "short-term":
         lines.append(f"  Hostname:        {cyan(result.get('hostname', 'N/A'))}")
@@ -177,7 +176,6 @@ def format_decode_table_output(result: Dict) -> str:
         lines.append(f"  Algorithm:       {result.get('algorithm', 'N/A')}")
         lines.append(f"  Signed Headers:  {result.get('signed_headers', 'N/A')}")
         lines.append(f"  Signature:       {result.get('signature_preview', 'N/A')}")
-        lines.append(f"  Format:          {result.get('format', 'N/A')}")
 
     if "security_notes" in result and result["security_notes"]:
         lines.append(f"\n  {bold(yellow('Security Notes:'))}")

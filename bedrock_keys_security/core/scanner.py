@@ -282,8 +282,15 @@ class PhantomUserScanner:
             click.echo(f"\n{output.green('No orphaned phantom users found. Nothing to clean up.')}\n")
             return {'total': 0, 'deleted': 0, 'failed': 0}
 
-        click.echo(f"\n{output.bold(f'Orphaned Phantom Users Found: {len(orphaned_users)}')}")
-        click.echo(f"{output.yellow('The following users have no active credentials and can be safely deleted:')}\n")
+        n_orphaned = len(orphaned_users)
+        orphaned_word = "User" if n_orphaned == 1 else "Users"
+        click.echo(f"\n{output.bold(f'Orphaned Phantom {orphaned_word} Found: {n_orphaned}')}")
+        unsafe_msg = (
+            "This user has no active credentials and can be safely deleted:"
+            if n_orphaned == 1
+            else "The following users have no active credentials and can be safely deleted:"
+        )
+        click.echo(f"{output.yellow(unsafe_msg)}\n")
 
         for user in orphaned_users:
             created_date = user['created'].strftime('%Y-%m-%d')
@@ -294,7 +301,9 @@ class PhantomUserScanner:
         # Safety check: Never delete ACTIVE or AT RISK users
         unsafe_users = [u for u in phantoms if u['status'] in ['ACTIVE', 'AT RISK']]
         if unsafe_users and not force:
-            click.echo(output.red(f"[WARNING] Found {len(unsafe_users)} users with active credentials."))
+            n_unsafe = len(unsafe_users)
+            unsafe_word = "user" if n_unsafe == 1 else "users"
+            click.echo(output.red(f"[WARNING] Found {n_unsafe} {unsafe_word} with active credentials."))
             click.echo(output.red("These will NOT be deleted for safety:"))
             for user in unsafe_users:
                 click.echo(f"  \u2022 {user['username']} ({user['status']})")
@@ -406,7 +415,10 @@ class PhantomUserScanner:
                 output.info("All access keys already inactive")
 
             click.echo(f"\n{click.style('\u2713 Key revocation complete', fg='green', bold=True)}")
-            output.info("Verify with CloudTrail monitoring (should see Access Denied)\n")
+            output.info(
+                "Verify: AWS_BEARER_TOKEN_BEDROCK=<key> aws bedrock list-foundation-models  "
+                "(expect AccessDenied)\n"
+            )
             return True
 
         except ClientError as e:
@@ -829,22 +841,19 @@ class PhantomUserScanner:
         return report_content
 
     def report_header(self) -> str:
-        """Generate report header with context for first-time users"""
-        lines = []
-        lines.append(f"\n{output.bold('─' * 60)}")
-        lines.append(f"{output.bold(output.cyan('  bks: Bedrock Keys Security'))}")
-        lines.append(f"{output.bold('─' * 60)}")
-        lines.append("")
-        lines.append("  Scans for phantom IAM users (BedrockAPIKey-*)")
-        lines.append("  silently provisioned when long-term keys are")
-        lines.append("  generated via the Console. They persist with")
-        lines.append("  admin-level Bedrock + IAM/VPC/KMS permissions.")
-        lines.append("")
-        lines.append(f"  Docs: {output.cyan('https://github.com/BeyondTrust/bedrock-keys-security')}")
-        lines.append(f"{output.bold('─' * 60)}")
-        lines.append("")
-        lines.append(f"Account: {output.cyan(self.account_id)}")
-        lines.append(f"Region:  {self.region}")
+        """Two-line banner: version + scope, account + region.
+
+        The educational paragraph and docs link that previously lived
+        here moved to ``bks --help`` so they show up once on first
+        encounter rather than on every scan invocation. Commit hash
+        stays available via ``bks --version`` for forensic context.
+        """
+        from bedrock_keys_security import __version__
+
+        lines = [
+            f"\n{output.bold(output.cyan(f'bks v{__version__}'))}  BedrockAPIKey-* phantom user scanner",
+            f"Account: {output.cyan(self.account_id)}  Region: {self.region}",
+        ]
         return '\n'.join(lines)
 
     def _format_summary(self, phantoms: List[Dict], total: int, active: int, orphaned: int, at_risk: int) -> List[str]:

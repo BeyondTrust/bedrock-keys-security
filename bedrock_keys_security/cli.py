@@ -40,7 +40,15 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 @click.version_option(_version_string, prog_name='bks')
 @click.pass_context
 def cli(ctx, profile, region, verbose):
-    """Bedrock API Keys Security Toolkit - Discovery, cleanup, incident response, and key decoding"""
+    """Bedrock API Keys Security Toolkit (BKS).
+
+    Scans for phantom IAM users (BedrockAPIKey-*) silently provisioned when
+    long-term Bedrock keys are generated via the AWS Console. These users
+    persist with admin-level Bedrock + IAM/VPC/KMS permissions even after
+    the originating key is rotated or revoked.
+
+    Subcommands: scan, decode-key, timeline, revoke-key, report, cleanup.
+    """
     ctx.ensure_object(Context)
     ctx.obj.profile = profile
     ctx.obj.region = region
