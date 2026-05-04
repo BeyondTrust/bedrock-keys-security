@@ -84,8 +84,19 @@ class PhantomUserScanner:
                 for fut in as_completed(futures):
                     phantom_users.append(fut.result())
 
-        # Preserve the list_users ordering (helpful for stable diffs across runs)
-        phantom_users.sort(key=lambda u: u['username'])
+        # Sort priority-first: AT RISK (urgent privesc surface) > ACTIVE
+        # (live credentials) > ORPHANED (cleanup candidates). Within each
+        # status, oldest first because the longest-forgotten phantoms are
+        # the most concerning. Username is the final tiebreaker so the
+        # ordering is deterministic across runs.
+        _STATUS_PRIORITY = {'AT RISK': 0, 'ACTIVE': 1, 'ORPHANED': 2}
+        phantom_users.sort(
+            key=lambda u: (
+                _STATUS_PRIORITY.get(u.get('status'), 99),
+                u['created'],
+                u['username'],
+            )
+        )
 
         if self.verbose:
             output.success(f"Found {len(phantom_users)} phantom users")
@@ -841,9 +852,9 @@ class PhantomUserScanner:
         lines = []
         lines.append(f"\n{output.bold('Summary:')}")
         lines.append(f"  Total phantom users: {output.cyan(str(total))}")
-        lines.append(f"  Active: {output.green(str(active))}")
-        lines.append(f"  Orphaned: {output.yellow(str(orphaned))} (safe to cleanup)")
         lines.append(f"  At Risk: {output.red(str(at_risk))} (IAM access keys found)")
+        lines.append(f"  Active: {output.green(str(active))} (live Bedrock API keys)")
+        lines.append(f"  Orphaned: {output.yellow(str(orphaned))} (safe to cleanup)")
 
         if at_risk > 0:
             user_word = "phantom user" if at_risk == 1 else "phantom users"
@@ -869,7 +880,7 @@ class PhantomUserScanner:
         if orphaned > 0:
             user_word = "phantom user" if orphaned == 1 else "phantom users"
             header = click.style(
-                f"ORPHANED · {orphaned} {user_word} with no active credentials",
+                f"▸ ORPHANED · {orphaned} {user_word} with no active credentials",
                 fg='yellow',
                 bold=True,
             )
