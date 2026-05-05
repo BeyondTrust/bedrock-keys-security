@@ -88,6 +88,7 @@ bks scan --profile prod       # use a specific AWS profile
 bks scan --json               # machine-readable output
 bks scan --csv output.csv     # export to CSV
 bks scan --verbose            # detailed output
+bks --quiet scan --json       # SOAR pipelines: errors to stderr, JSON to stdout (--quiet is a global flag)
 ```
 
 Each phantom user is categorized by risk level:
