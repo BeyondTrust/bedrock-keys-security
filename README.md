@@ -7,6 +7,7 @@ Security toolkit for AWS Bedrock API keys: phantom user discovery, offline key d
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI](https://img.shields.io/pypi/v/bedrock-keys-security.svg)](https://pypi.org/project/bedrock-keys-security/)
+[![Black Hat Arsenal US 26](https://img.shields.io/badge/Black%20Hat-Arsenal%20US%2026-black)](https://blackhat.com/us-26/arsenal/schedule/index.html#bedrock-keys-security-bks-hunting-phantom-iam-users-created-by-aws-bedrock-api-keys-52541)
 [![Twitter](https://img.shields.io/twitter/url/https/twitter.com/MrCloudSec.svg?style=social&label=Follow%20the%20author)](https://twitter.com/MrCloudSec)
 
 **Contents**: [Quickstart](#quickstart) · [Motivation](#motivation) · [Installation](#installation) · [Usage](#usage) · [Prevention](#prevention-with-service-control-policies) · [Detection](#detection-content) · [Migration to STS](#migration-to-sts) · [Talks](#talks) · [Contributing](#contributing)
@@ -210,6 +211,7 @@ API keys may still be necessary for legacy applications hardcoded for bearer tok
 
 ## Talks
 
+- **Black Hat USA 2026 Arsenal** (upcoming, August 2026): *Bedrock Keys Security (BKS): Hunting Phantom IAM Users Created by AWS Bedrock API Keys* ([session](https://blackhat.com/us-26/arsenal/schedule/index.html#bedrock-keys-security-bks-hunting-phantom-iam-users-created-by-aws-bedrock-api-keys-52541))
 - **BSides Seattle 2026**: *The Phantom of the Infrastructure: Investigating the Hidden IAM Risks in Bedrock API Keys* ([slides](docs/bsides-seattle-2026.pdf), [video](https://www.youtube.com/watch?v=v3wvjb9Gu-c))
 - **RootedCON Madrid 2026**: *The Phantom of the Infrastructure: The Invisible Threat in Bedrock API Keys*
 
