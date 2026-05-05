@@ -26,6 +26,12 @@ output/
 *.csv
 *.log
 
+# Terraform (provider binaries; .terraform.lock.hcl IS committed)
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfplan
+
 # Claude Code
 .claude/
 CLAUDE.md
