@@ -194,8 +194,7 @@ class BedrockKeyDecoder:
                 ),
                 'security_notes': [
                     'Temporary credential with time-limited validity',
-                    'Revocable via aws:TokenIssueTime deny policy on the issuing principal '
-                    '(see incident response runbook in README)',
+                    'Revocable via aws:TokenIssueTime deny policy on the issuing principal',
                     'Presigned URL contains AWS credentials',
                     f'Expires {expires_at}' if expires_at != 'Unknown'
                     else 'Expiry: unknown (could not parse presigned URL)',

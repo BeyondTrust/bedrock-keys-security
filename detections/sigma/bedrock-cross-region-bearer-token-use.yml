@@ -3,11 +3,10 @@ id: a344e18c-c8b6-4595-97c1-0dd88e1d13d4
 name: bedrock_bearer_data_plane_call
 status: stable
 description: |
-    Internal base rule for the cross-region correlation. Matches any
+    Base rule for the cross-region correlation. Matches any
     InvokeModel-family call authenticated by a Bedrock API key (long-term
-    or short-term), anchored on additionalEventData.callWithBearerToken =
-    true so it works for both key types regardless of userIdentity.userName
-    shape (short-term keys do NOT use BedrockAPIKey-* usernames).
+    or short-term), anchored on additionalEventData.callWithBearerToken so
+    it works for both key types regardless of userName shape.
 references:
     - https://github.com/BeyondTrust/bedrock-keys-security
 author: BeyondTrust Phantom Labs
@@ -33,21 +32,11 @@ id: eb006603-5e96-427b-9d03-e6442f203308
 status: experimental
 description: |
     Detects the same Bedrock bearer principal issuing data-plane calls
-    across two or more AWS regions within 30 minutes. This is the
-    canonical LLMjacking fan-out pattern: stolen keys are spun up across
-    regions to maximize foundation model throughput before detection.
-
-    Anchored on additionalEventData.callWithBearerToken (the universal
-    signal for any Bedrock API key request), so this catches both
-    long-term keys (phantom users) and short-term keys (STS-derived
-    bearer tokens whose userName is the assumed role / session name,
-    not BedrockAPIKey-*). Aggregating by userIdentity.principalId (not
-    userName) is what makes short-term keys visible.
-
-    Modelled as a Sigma 2.x correlation (value_count). Backends that
-    support correlations (Splunk, Elastic Lucene, ESQL, Sentinel KQL)
-    will emit aggregation queries; legacy backends without correlation
-    support will need the original pipe-style fallback.
+    across two or more AWS regions within 30 minutes. Canonical LLMjacking
+    fan-out pattern: stolen keys spun up across regions to maximize
+    foundation-model throughput. Aggregates by userIdentity.principalId so
+    both long-term keys (phantom users) and short-term keys (STS-derived,
+    no BedrockAPIKey-* userName) are caught.
 references:
     - https://github.com/BeyondTrust/bedrock-keys-security#llmjacking
 author: BeyondTrust Phantom Labs

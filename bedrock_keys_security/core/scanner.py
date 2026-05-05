@@ -75,9 +75,6 @@ class PhantomUserScanner:
             sys.exit(1)
         self.last_users_scanned = total_users_scanned
 
-        # Phase 2: enrich each user with 3 IAM calls in parallel.
-        # boto3 clients are thread-safe at the request level (each request
-        # gets its own underlying connection from the pool).
         def enrich(user_data: Dict) -> Dict:
             username = user_data['username']
             user_data.update(self.check_credentials(username))
@@ -93,11 +90,7 @@ class PhantomUserScanner:
                 for fut in as_completed(futures):
                     phantom_users.append(fut.result())
 
-        # Sort priority-first: AT RISK (urgent privesc surface) > ACTIVE
-        # (live credentials) > ORPHANED (cleanup candidates). Within each
-        # status, oldest first because the longest-forgotten phantoms are
-        # the most concerning. Username is the final tiebreaker so the
-        # ordering is deterministic across runs.
+        # AT RISK > ACTIVE > ORPHANED, then oldest first, then username for determinism.
         _STATUS_PRIORITY = {'AT RISK': 0, 'ACTIVE': 1, 'ORPHANED': 2}
         phantom_users.sort(
             key=lambda u: (
@@ -747,7 +740,7 @@ class PhantomUserScanner:
             else:
                 click.echo(output.cyan(line))
 
-        # Per-region tally \u2014 surfaces LLMjacking fan-out at a glance
+        # Per-region tally for fan-out detection.
         from collections import Counter
         region_tally = Counter(e.get('_Region', self.region) for e in all_events)
         if len(region_tally) > 1:

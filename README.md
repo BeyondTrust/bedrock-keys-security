@@ -45,7 +45,7 @@ These phantom users are never automatically cleaned up. They accumulate over tim
 
 ![Attack Paths Diagram](https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/attack-paths.jpeg)
 
-**LLMjacking:** An attacker who obtains a leaked key can spin up workers across all AWS regions to consume foundation model capacity. The default Bedrock service quota and Claude Opus 4.7 pricing put the worst-case exposure at up to $18,000/day per region.
+**LLMjacking:** An attacker who obtains a leaked key can spin up workers across all AWS regions to consume foundation model capacity. Worst-case exposure depends on the default Bedrock service quota and the model price; for Claude Opus 4.7 at list pricing (May 2026), this works out to roughly $18,000/day per region. Refresh annually as Bedrock pricing changes.
 
 ![LLMjacking Attack Flow](https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/llm-jacking.jpeg)
 

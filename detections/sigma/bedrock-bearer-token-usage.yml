@@ -2,16 +2,11 @@ title: Bedrock API Key Usage (callWithBearerToken Signal)
 id: 795a4ee0-e66c-461f-936a-6d95cb505128
 status: stable
 description: |
-    Primary detection signal for any Bedrock API key usage. Every long-term
-    or short-term Bedrock API key request records the field
-    additionalEventData.callWithBearerToken = true in CloudTrail. This field
-    appears consistently for both key types and is absent from standard
-    SigV4-authenticated Bedrock requests.
-
-    If this rule fires, a Bedrock API key (not a SigV4 credential) was used.
-    Use this rule as the foundation for tier-1 visibility, then layer
-    higher-confidence rules (privilege escalation, cross-region fan-out,
-    suspicious user agents) on top.
+    Primary detection signal for any Bedrock API key request. Every
+    long-term and short-term Bedrock API key call records
+    additionalEventData.callWithBearerToken = true in CloudTrail; standard
+    SigV4-authenticated Bedrock requests do not. If this rule fires, a
+    Bedrock API key (not a SigV4 credential) was used.
 references:
     - https://github.com/BeyondTrust/bedrock-keys-security
     - https://docs.aws.amazon.com/bedrock/latest/userguide/logging-using-cloudtrail.html

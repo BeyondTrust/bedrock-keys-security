@@ -1,8 +1,6 @@
 # Detection Content
 
-Detection rules and copy-paste deployment templates for Bedrock API key abuse and the phantom IAM user attack chain. Each file is independently usable: drop into your SIEM / EventBridge / CloudWatch Insights / CloudTrail Lake / Athena directly.
-
-The primary CloudTrail detection signal for any Bedrock API key request is the field `additionalEventData.callWithBearerToken = true`. Present for both long-term and short-term keys, absent from standard SigV4 requests.
+Drop-in rules for Bedrock API key abuse and the phantom IAM user attack chain. Each file is independently deployable to your SIEM, EventBridge, CloudWatch Insights, CloudTrail Lake, or Athena.
 
 ## Sigma rules (`sigma/`)
 
@@ -59,7 +57,7 @@ Five patterns. `bedrock-api-key-usage.json` targets `aws.bedrock` and catches ev
 
 ## Tuning notes
 
-- All rules assume CloudTrail management events are flowing. For Bedrock data-plane visibility (`InvokeModel`), enable Bedrock CloudTrail data events at the trail level.
-- Threshold values (rate, region count, time window) are conservative defaults. Tune per environment volume.
-- The phantom user pattern `BedrockAPIKey-*` is exact for AWS Console-created long-term keys. STS-derived short-term bearer tokens do not create phantom users.
-- The `callWithBearerToken` field is the most reliable signal: it appears on every key type and is absent from SigV4 requests. Build your visibility baseline from this rule first, then layer the higher-confidence detections on top.
+- Rules assume CloudTrail management events are flowing. For Bedrock data-plane visibility (`InvokeModel`), enable Bedrock data events on the trail.
+- Thresholds (rate, region count, time window) are conservative defaults. Tune per environment volume.
+- `BedrockAPIKey-*` phantom users only exist for AWS Console-created long-term keys. STS-derived short-term bearer tokens do not create phantom users; aggregate by `userIdentity.principalId` to catch them.
+- Build the visibility baseline from `bedrock-bearer-token-usage.yml` first (it fires on every API key request), then layer the higher-confidence rules on top.
