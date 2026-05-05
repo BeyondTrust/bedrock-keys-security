@@ -47,10 +47,10 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 def cli(ctx, profile, region, verbose, quiet):
     """Bedrock API Keys Security Toolkit (BKS).
 
-    Scans for phantom IAM users (BedrockAPIKey-*) silently provisioned when
-    long-term Bedrock keys are generated via the AWS Console. These users
-    persist with admin-level Bedrock + IAM/VPC/KMS permissions even after
-    the originating key is rotated or revoked.
+    The AWS Bedrock API keys security toolkit. Includes a phantom user
+    scanner (BedrockAPIKey-* IAM users silently provisioned by Console
+    long-term keys), an offline key decoder for ABSK and short-term keys,
+    incident response commands, and a report generator.
 
     Subcommands: scan, decode-key, timeline, revoke-key, report, cleanup.
     """

@@ -1,8 +1,8 @@
 # Bedrock API Keys Security
 
-**Find and contain phantom IAM users from Bedrock keys.**
+**The AWS Bedrock API keys security toolkit.**
 
-Security toolkit for AWS Bedrock API keys: phantom user discovery, offline key decoder, incident response, automated cleanup, and preventive SCPs.
+Offline key decoder, phantom user discovery, incident response, automated cleanup, preventive SCPs, and SIEM-ready detection content.
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -19,7 +19,7 @@ pip install bedrock-keys-security
 bks scan --profile your-aws-profile
 ```
 
-That's it. The scanner discovers every `BedrockAPIKey-*` phantom user in the account, categorizes risk (`ACTIVE` / `ORPHANED` / `AT RISK`), and prints a summary table.
+The default `bks scan` command discovers every `BedrockAPIKey-*` phantom user in the account, categorizes risk (`ACTIVE` / `ORPHANED` / `AT RISK`), and prints a summary table.
 
 ```bash
 # Decode a leaked key offline (no AWS credentials needed)
@@ -36,7 +36,9 @@ Detection content (Sigma, CloudTrail Lake, Athena, EventBridge, CloudWatch Insig
 
 ## Motivation
 
-When a user creates a long-term Bedrock API key through the AWS Console, AWS silently provisions an IAM user named `BedrockAPIKey-xxxx` and attaches the [`AmazonBedrockLimitedAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonBedrockLimitedAccess.html) managed policy.
+AWS Bedrock API keys behave unlike regular AWS credentials. They authenticate via bearer tokens instead of SigV4, they embed the AWS account ID and IAM username in plain base64, and, when generated as long-term keys through the AWS Console, they silently spawn an IAM user with broad permissions that the console never shows.
+
+That last case is the most damaging. When a user creates a long-term Bedrock API key through the AWS Console, AWS silently provisions an IAM user named `BedrockAPIKey-xxxx` and attaches the [`AmazonBedrockLimitedAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonBedrockLimitedAccess.html) managed policy.
 
 Despite its name, the policy is effectively administrative: 47 `bedrock:*` actions covering create / read / update / delete across all Bedrock resources, plus cross-service reconnaissance (`iam:ListRoles`, `kms:DescribeKey`, `ec2:Describe{Vpcs,Subnets,SecurityGroups}`). Full action list in the AWS doc linked above.
 
