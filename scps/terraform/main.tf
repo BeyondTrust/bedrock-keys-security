@@ -1,5 +1,6 @@
-# Policies are inlined (not loaded from ../../scps/*.json) so the module is
-# self-contained as a remote source. Keep bodies below in sync with /scps/*.json.
+# Policies are inlined (not loaded from ../*.json) so the module is
+# self-contained as a remote source. Keep bodies below in sync with the
+# four JSON files in this module's parent directory.
 
 locals {
   scps = {

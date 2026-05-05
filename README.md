@@ -32,7 +32,7 @@ bks timeline BedrockAPIKey-xxxx --all-regions --days 30
 bks revoke-key BedrockAPIKey-xxxx
 ```
 
-Detection content (Sigma, CloudTrail Lake, Athena, EventBridge, CloudWatch Insights) lives in [`detections/`](detections/). Terraform and CloudFormation for the SCPs live in [`iac/`](iac/).
+Detection content (Sigma, CloudTrail Lake, Athena, EventBridge, CloudWatch Insights) lives in [`detections/`](detections/). Terraform and CloudFormation for the SCPs live alongside the policies under [`scps/`](scps/).
 
 ## Motivation
 
@@ -178,8 +178,8 @@ aws organizations attach-policy \
 
 The same four SCPs are available as ready-to-deploy modules:
 
-- **Terraform**: [`iac/terraform/`](iac/terraform/) wraps the four SCPs as `aws_organizations_policy` resources with optional OU attachment.
-- **CloudFormation**: [`iac/cloudformation/scps.yaml`](iac/cloudformation/scps.yaml) is a single template with conditional resources, StackSet-friendly.
+- **Terraform**: [`scps/terraform/`](scps/terraform/) wraps the four SCPs as `aws_organizations_policy` resources with optional OU attachment.
+- **CloudFormation**: [`scps/cloudformation/scps.yaml`](scps/cloudformation/scps.yaml) is a single template with conditional resources, StackSet-friendly.
 
 Both default to enabling `Block-Bedrock-API-Keys` plus `Block-Phantom-User-Escalation`, the recommended baseline pair.
 

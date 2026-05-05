@@ -7,7 +7,7 @@ Terraform module that mirrors the four JSON SCPs in `scps/` as
 
 ```hcl
 module "bedrock_scps" {
-  source = "./iac/terraform"
+  source = "./scps/terraform"
 
   # Pick which SCPs to create. Defaults: only "block_all_keys".
   enable_block_all_keys              = true
