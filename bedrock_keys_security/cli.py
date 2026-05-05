@@ -40,8 +40,8 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 @click.option('--region', default='us-east-1', help='AWS region (default: us-east-1)')
 @click.option('--verbose', '-v', is_flag=True, help='Enable verbose output')
 @click.option('--quiet', '-q', is_flag=True,
-              help='Suppress info / success / warning logs. Errors still go to stderr; '
-                   'final structured output (tables, JSON, reports) still prints. Useful for SOAR pipelines.')
+              help='Suppress info / success / warning logs and the scan banner / table / summary. '
+                   'Errors still go to stderr; saved-file paths still print to stdout. Useful for SOAR pipelines.')
 @click.version_option(_version_string, prog_name='bks')
 @click.pass_context
 def cli(ctx, profile, region, verbose, quiet):

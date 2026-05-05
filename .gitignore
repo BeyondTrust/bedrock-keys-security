@@ -22,6 +22,7 @@ venv/
 *.swp
 
 # Output
+output/
 *.csv
 *.log
 

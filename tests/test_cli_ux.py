@@ -9,6 +9,7 @@ Covers behavior that the decoder suite does not reach:
 - PhantomUserScanner.find_phantom_users() sets last_users_scanned to
   the total IAM users iterated, not just phantom matches
 - cleanup_orphaned_users() pluralization at n=1 vs n>1
+- build_output_path() shape and outputs/ directory creation
 
 Stubs are intentionally minimal (MagicMock for the IAM client, a small
 session-shape object) so the tests stay readable.
@@ -20,6 +21,7 @@ from unittest.mock import MagicMock
 import click
 import pytest
 
+from bedrock_keys_security.commands.scan import build_output_path
 from bedrock_keys_security.core.scanner import PhantomUserScanner
 from bedrock_keys_security.utils import output
 
@@ -210,3 +212,21 @@ class TestCleanupPluralization:
         out = click.unstyle(capsys.readouterr().out)
         assert "Orphaned Phantom Users Found: 3" in out
         assert "The following users have no active credentials" in out
+
+
+class TestBuildOutputPath:
+    def test_filename_shape(self, tmp_path):
+        path = build_output_path("123456789012", "json", output_dir=tmp_path)
+        assert path.parent == tmp_path
+        assert path.name.startswith("bks-scan-123456789012-")
+        assert path.name.endswith(".json")
+        ts = path.stem.split("-")[-1]
+        assert len(ts) == len("YYYYMMDDTHHMMSSZ")
+        assert ts.endswith("Z")
+
+    def test_creates_directory_when_missing(self, tmp_path):
+        target = tmp_path / "nested" / "outputs"
+        assert not target.exists()
+        path = build_output_path("123456789012", "csv", output_dir=target)
+        assert target.is_dir()
+        assert path.parent == target

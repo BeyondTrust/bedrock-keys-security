@@ -910,11 +910,7 @@ class PhantomUserScanner:
         return json.dumps(report, indent=2, default=_json_default)
 
     def generate_csv_report(self, phantoms: List[Dict], output_file: str):
-        """Generate CSV report and save to file"""
-        if not phantoms:
-            click.echo(output.yellow("No phantom users to export."))
-            return
-
+        """Generate CSV report and save to file. Always writes (header-only if no phantoms)."""
         fieldnames = [
             'username', 'user_id', 'created', 'status',
             'active_bedrock_credentials', 'bedrock_credentials',
@@ -935,8 +931,6 @@ class PhantomUserScanner:
                     row['inline_policies'] = ','.join(user.get('inline_policies', []))
 
                     writer.writerow(row)
-
-            output.success(f"CSV report saved to: {output_file}")
 
         except IOError as e:
             output.error(f"Failed to write CSV file: {e}")
