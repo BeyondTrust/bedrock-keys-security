@@ -810,7 +810,7 @@ class PhantomUserScanner:
             f"\n{output.bold(output.cyan(f'bks v{__version__}'))}  BedrockAPIKey-* phantom user scanner",
             f"Account: {output.cyan(self.account_id)}  Region: {self.region}",
         ]
-        return '\n'.join(lines)
+        return '\n'.join(lines) + '\n'
 
     def _format_summary(self, phantoms: List[Dict], total: int, active: int, orphaned: int, at_risk: int) -> List[str]:
         """Format the summary block shared between report methods"""
