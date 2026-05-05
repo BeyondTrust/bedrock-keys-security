@@ -56,6 +56,7 @@ class TestDecodeLongTerm:
             "arn:aws:iam::123456789012:user/BedrockAPIKey-h42z"
         )
         assert result["secret_length"] == len("thisisasecretsecret123456")
+        assert result["security_notes"] == []
 
     def test_secondary_key_strips_plus_marker(self):
         key = _build_long_term_key(
@@ -69,9 +70,8 @@ class TestDecodeLongTerm:
         assert result["key_position"] == "secondary"
         assert result["is_secondary"] is True
         assert result["key_index_marker"] == "+1"
-        assert any(
-            "Secondary key" in note for note in result["security_notes"]
-        )
+        assert len(result["security_notes"]) == 1
+        assert "Secondary key" in result["security_notes"][0]
 
     def test_missing_at_separator_returns_error(self):
         key = _build_long_term_key(b"BedrockAPIKey-h42z-no-separator-here")

@@ -65,12 +65,7 @@ class BedrockKeyDecoder:
 
             user_suffix = username[len('BedrockAPIKey-'):] if username.startswith('BedrockAPIKey-') else username
 
-            security_notes = [
-                'AWS Account ID disclosed (enables reconnaissance)',
-                'IAM username disclosed (enables targeted attacks)',
-                'ABSK prefix enables automated secret scanning',
-                'Credential persists until explicitly revoked',
-            ]
+            security_notes = []
             if key_position == 'secondary':
                 security_notes.append(
                     'Secondary key (+N marker present): phantom user has at least 2 active ABSK credentials'
