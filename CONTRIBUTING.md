@@ -200,7 +200,8 @@ bks scan --help
 bks decode-key "ABSKQmVkcm9ja..."  # offline, safe to run anywhere
 
 # If you changed AWS-touching code, run against a sandbox account
-bks scan --profile sandbox --json | python3 -m json.tool > /dev/null
+bks scan --profile sandbox --json
+python3 -m json.tool < "$(ls -t output/bks-scan-*.json | head -1)" > /dev/null
 
 # If you changed SCPs, validate JSON
 for f in scps/*.json; do python3 -m json.tool "$f" > /dev/null && echo "OK $f"; done

@@ -85,11 +85,12 @@ Run a scan to discover all phantom IAM users in your account:
 ```bash
 bks scan                      # scan with default profile
 bks scan --profile prod       # use a specific AWS profile
-bks scan --json               # machine-readable output
-bks scan --csv output.csv     # export to CSV
+bks scan --json               # save JSON to output/
+bks scan --csv                # save CSV to output/
 bks scan --verbose            # detailed output
-bks --quiet scan --json       # SOAR pipelines: errors to stderr, JSON to stdout (--quiet is a global flag)
 ```
+
+JSON / CSV reports are written to `output/bks-scan-<account>-<UTC-timestamp>.<ext>` (the directory is created automatically).
 
 Each phantom user is categorized by risk level:
 - **ACTIVE:** Has valid Bedrock API credentials
