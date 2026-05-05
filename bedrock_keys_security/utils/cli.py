@@ -6,11 +6,7 @@ from bedrock_keys_security.core.decoder import BedrockKeyDecoder
 
 
 def aws_options(f):
-    """Add --profile and --region to a subcommand and merge with group context.
-
-    Group-level options (bks --profile X scan) and subcommand-level options
-    (bks scan --profile X) both work; subcommand wins when both are set.
-    """
+    """Add --profile and --region to a subcommand. Subcommand-level wins over group-level."""
     f = click.option('--region', default=None, help='AWS region (overrides group-level)')(f)
     f = click.option('--profile', default=None, help='AWS profile (overrides group-level)')(f)
     return f
@@ -25,15 +21,9 @@ def apply_aws_overrides(ctx, profile, region):
 
 
 def resolve_username(value: str) -> str:
-    """Accept either an IAM username or a Bedrock API key.
+    """Accept an IAM username or a Bedrock API key; ABSK keys are decoded to their phantom username.
 
-    Long-term ABSK keys are decoded offline and the underlying
-    BedrockAPIKey-<id> phantom username is returned. Short-term keys have
-    no phantom user, so the function errors out with a pointer to the
-    aws:TokenIssueTime IR procedure. Plain usernames pass through unchanged.
-
-    Lets the IR flow read naturally: `bks revoke-key <leaked-ABSK-key>`
-    works without forcing the responder to manually decode first.
+    Short-term keys raise a ClickException pointing at the aws:TokenIssueTime IR path.
     """
     if value.startswith(BedrockKeyDecoder.LONG_TERM_PREFIX):
         result = BedrockKeyDecoder.decode_long_term_key(value)

@@ -41,16 +41,10 @@ class PhantomUserScanner:
         self.region = aws_session.region
 
     def find_phantom_users(self) -> List[Dict]:
-        """Find all IAM users starting with 'BedrockAPIKey-' and enrich them in parallel.
-
-        Sets ``self.last_users_scanned`` to the total number of IAM users
-        iterated (not just phantom matches), so the scan command can
-        print a "scanned N users, found M phantoms" completion line.
-        """
+        """Find all BedrockAPIKey-* IAM users and enrich each one in parallel."""
         if self.verbose:
             output.info("Scanning for phantom IAM users...")
 
-        # Phase 1: list users (paginated, sequential, single API call stream)
         bare_users: List[Dict] = []
         total_users_scanned = 0
         try:
@@ -233,40 +227,35 @@ class PhantomUserScanner:
             if self.verbose:
                 output.info(f"Deleting phantom user: {username}")
 
-            # 1. Delete all access keys
             access_keys = self.iam.list_access_keys(UserName=username)['AccessKeyMetadata']
             for key in access_keys:
                 if self.verbose:
-                    output.info(f"  [DELETE] Access key: {key['AccessKeyId']}")
+                    output.info(f"  Deleting access key: {key['AccessKeyId']}")
                 self.iam.delete_access_key(UserName=username, AccessKeyId=key['AccessKeyId'])
 
-            # 2. Delete all service-specific credentials (Bedrock API keys)
             service_creds = self.iam.list_service_specific_credentials(UserName=username)['ServiceSpecificCredentials']
             for cred in service_creds:
                 if self.verbose:
-                    output.info(f"  [DELETE] Bedrock API key: {cred['ServiceSpecificCredentialId']}")
+                    output.info(f"  Deleting Bedrock API key: {cred['ServiceSpecificCredentialId']}")
                 self.iam.delete_service_specific_credential(
                     UserName=username,
                     ServiceSpecificCredentialId=cred['ServiceSpecificCredentialId']
                 )
 
-            # 3. Detach all managed policies
             attached = self.iam.list_attached_user_policies(UserName=username)['AttachedPolicies']
             for policy in attached:
                 if self.verbose:
-                    output.info(f"  [DETACH] Policy: {policy['PolicyName']}")
+                    output.info(f"  Detaching managed policy: {policy['PolicyName']}")
                 self.iam.detach_user_policy(UserName=username, PolicyArn=policy['PolicyArn'])
 
-            # 4. Delete all inline policies
             inline = self.iam.list_user_policies(UserName=username)['PolicyNames']
             for policy_name in inline:
                 if self.verbose:
-                    output.info(f"  [DELETE] Inline policy: {policy_name}")
+                    output.info(f"  Deleting inline policy: {policy_name}")
                 self.iam.delete_user_policy(UserName=username, PolicyName=policy_name)
 
-            # 5. Delete the user
             if self.verbose:
-                output.info(f"  [DELETE] IAM user: {username}")
+                output.info(f"  Deleting IAM user: {username}")
             self.iam.delete_user(UserName=username)
 
             output.success(f"Deleted phantom user: {username}")
@@ -300,24 +289,21 @@ class PhantomUserScanner:
 
         click.echo()
 
-        # Safety check: Never delete ACTIVE or AT RISK users
         unsafe_users = [u for u in phantoms if u['status'] in ['ACTIVE', 'AT RISK']]
         if unsafe_users and not force:
             n_unsafe = len(unsafe_users)
             unsafe_word = "user" if n_unsafe == 1 else "users"
-            click.echo(output.red(f"[WARNING] Found {n_unsafe} {unsafe_word} with active credentials."))
+            click.echo(output.red(f"\u26a0 Found {n_unsafe} {unsafe_word} with active credentials."))
             click.echo(output.red("These will NOT be deleted for safety:"))
             for user in unsafe_users:
                 click.echo(f"  \u2022 {user['username']} ({user['status']})")
             click.echo()
 
-        # Confirmation prompt (unless forced or dry-run)
         if not dry_run and not force:
             if not click.confirm(click.style(f"Delete {len(orphaned_users)} orphaned phantom {'user' if len(orphaned_users) == 1 else 'users'}?", fg="yellow"), default=False):
                 output.info("Cleanup cancelled by user.")
                 return {'total': len(orphaned_users), 'deleted': 0, 'failed': 0}
 
-        # Perform cleanup
         stats = {'total': len(orphaned_users), 'deleted': 0, 'failed': 0}
 
         click.echo()
@@ -328,7 +314,6 @@ class PhantomUserScanner:
             else:
                 stats['failed'] += 1
 
-        # Print summary
         click.echo(f"\n{output.bold('Cleanup Summary:')}")
         if dry_run:
             click.echo(f"  {output.yellow('Mode: DRY-RUN (simulation only)')}")
@@ -449,16 +434,9 @@ class PhantomUserScanner:
         return False
 
     def _find_short_term_issuer(self, access_key_id: str):
-        """Look up the sessionIssuer (role or user) that minted a given STS access key.
+        """Look up the sessionIssuer (role or user) that minted an STS access key.
 
-        CloudTrail lookup-events filters by AccessKeyId match the events made BY that
-        access key, not the issuance event. That is exactly what we need: every usage
-        event carries userIdentity.sessionContext.sessionIssuer.arn pointing back at
-        the principal that called sts:AssumeRole / GetSessionToken / etc.
-
-        Returns (arn, name, kind) where kind is 'role' or 'user', or (None, None, None)
-        if no events were found or no sessionIssuer was attached (e.g. the leaked key
-        was never used).
+        Returns (arn, name, kind) or (None, None, None) when no usage events are found.
         """
         try:
             paginator = self.cloudtrail.get_paginator('lookup_events')
@@ -480,22 +458,10 @@ class PhantomUserScanner:
         return None, None, None
 
     def revoke_short_term_key(self, key: str, dry_run: bool = False, force: bool = False) -> bool:
-        """Revoke a short-term Bedrock API key by applying aws:TokenIssueTime deny on the issuing principal.
+        """Apply aws:TokenIssueTime deny on the principal that issued an STS bearer token.
 
-        Short-term keys are STS bearer tokens. The credential itself can't be deleted
-        (the SSC delete API doesn't apply); the only IR move is to deny every session
-        issued before now on the principal that minted the token.
-
-        Two guards before the policy is applied:
-        - If the issuer is an AWS SSO / Identity Center-managed role
-          (path includes aws-reserved/sso.amazonaws.com or name starts with
-          AWSReservedSSO_), AWS does not allow PutRolePolicy on it. Refused
-          here with a pointer to the right knob (Identity Center permission
-          set / SCP).
-        - If the issuer is the same principal the caller is currently
-          authenticated as, applying the deny would lock the caller out of
-          their own session (and any concurrent ones). Refused unless the
-          caller passes --force.
+        Refuses on SSO-managed roles (PutRolePolicy not allowed) and on self-revoke
+        (would kill the caller's own session) unless --force is passed.
         """
         from bedrock_keys_security.core.decoder import BedrockKeyDecoder
 
@@ -527,7 +493,6 @@ class PhantomUserScanner:
 
         click.echo(output.cyan(f"  Issuing principal: {issuer_arn}  ({issuer_kind})"))
 
-        # Guard 1: SSO-managed roles cannot accept PutRolePolicy
         if issuer_kind == 'role' and (
             'aws-reserved/sso.amazonaws.com' in issuer_arn
             or issuer_name.startswith('AWSReservedSSO_')
@@ -540,7 +505,6 @@ class PhantomUserScanner:
             )
             return False
 
-        # Guard 2: self-revoke would lock the caller out of their own session
         self_revoke = self._issuer_matches_caller(issuer_arn, issuer_kind)
         if self_revoke:
             click.echo(output.red(
@@ -607,19 +571,9 @@ class PhantomUserScanner:
     def discover_trail_coverage(self) -> Dict[str, str]:
         """Map enabled AWS regions to the CloudTrail trail covering them.
 
-        Returns {region: trail_name}. Multi-region or organization trails
-        cover all enabled regions; single-region trails cover only their
-        HomeRegion. Regions with no coverage are absent from the map.
-
-        For full trail metadata (IsMultiRegionTrail, IsOrganizationTrail,
-        HomeRegion, plus trails from other regions whose shadow lives here)
-        we use cloudtrail:DescribeTrails. The API does not expose a
-        paginator (no NextToken in the response shape), so list_trails +
-        get_trail per ARN would be required to true-paginate. In practice
-        an account rarely has more than a handful of trails and the AWS
-        API returns the full list in a single response; we accept that
-        contract here. If your org runs hundreds of trails per account,
-        consider migrating to list_trails + get_trail.
+        Returns {region: trail_name}. Multi-region / org trails cover all enabled
+        regions; single-region trails cover only their HomeRegion. Regions with
+        no coverage are absent from the map.
         """
         try:
             trails = self.cloudtrail.describe_trails(includeShadowTrails=True).get('trailList', [])

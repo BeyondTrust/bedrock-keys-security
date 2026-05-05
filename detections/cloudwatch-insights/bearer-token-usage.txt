@@ -1,16 +1,8 @@
-# CloudWatch Logs Insights: Bedrock API key usage breakdown.
+# CloudWatch Logs Insights: Bedrock API key usage by principal.
+# Recommended alarm: result count > 100/hour (tune to your baseline).
 #
-# Run against your CloudTrail log group. Returns per-principal call counts
-# so you can establish a baseline before tuning higher-precision rules.
-#
-# Recommended alarm: result count > 100 per hour (adjust to your baseline).
-#
-# Note on the filter value: CloudTrail-to-CloudWatch-Logs delivery
-# serialises the boolean callWithBearerToken as the string "true", not as
-# a native boolean. The filter therefore compares against "true" (quoted)
-# `= true` (unquoted) returns zero matches.
-#
-# Reference: https://github.com/BeyondTrust/bedrock-keys-security
+# CloudTrail-to-CWLogs serialises callWithBearerToken as the string "true",
+# not a native boolean. The filter quotes the value accordingly.
 
 fields @timestamp, userIdentity.principalId, sourceIPAddress, eventName, userAgent
 | filter additionalEventData.callWithBearerToken = "true"

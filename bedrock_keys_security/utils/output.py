@@ -31,12 +31,7 @@ _quiet_mode = False
 
 
 def set_quiet(value: bool) -> None:
-    """Toggle --quiet output suppression.
-
-    Suppresses info / success / warning / high_risk so SOAR pipelines
-    that pipe `bks` get clean stdout. Errors keep flowing to stderr;
-    they always matter regardless of quiet mode.
-    """
+    """Toggle --quiet: silences info/success/warning/high_risk. error always emits to stderr."""
     global _quiet_mode
     _quiet_mode = value
 
@@ -106,11 +101,7 @@ def cyan(text: str) -> str:
 
 @contextmanager
 def spinner(label="Scanning"):
-    """Simple threaded spinner for indeterminate progress.
-
-    No-op when stderr is not a TTY (pipes, redirects, CI) to avoid
-    flooding output with ANSI escape sequences.
-    """
+    """Threaded spinner for indeterminate progress; no-op when stderr is not a TTY."""
     if not sys.stderr.isatty():
         yield
         return

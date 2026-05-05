@@ -16,12 +16,7 @@ class BedrockKeyDecoder:
 
     @staticmethod
     def detect_key_type(key: str) -> Optional[str]:
-        """
-        Detect the type of Bedrock API key
-
-        Returns:
-            'long-term', 'short-term', or None
-        """
+        """Return 'long-term', 'short-term', or None."""
         if key.startswith(BedrockKeyDecoder.LONG_TERM_PREFIX):
             return 'long-term'
         elif key.startswith(BedrockKeyDecoder.SHORT_TERM_PREFIX):
@@ -31,11 +26,7 @@ class BedrockKeyDecoder:
 
     @staticmethod
     def decode_long_term_key(key: str) -> Dict:
-        """
-        Decode ABSK (long-term) Bedrock API key
-
-        Format: ABSK + base64(BedrockAPIKey-{id}-at-{account_id}:{secret})
-        """
+        """Decode ABSK (long-term) key. Format: ABSK + base64(BedrockAPIKey-{id}-at-{account}:{secret})."""
         try:
             encoded_part = key[len(BedrockKeyDecoder.LONG_TERM_PREFIX):]
             encoded_part += '=' * (-len(encoded_part) % 4)
@@ -61,10 +52,8 @@ class BedrockKeyDecoder:
             secret_preview = (secret[:8] + '...') if len(secret) > 8 else secret
             secret_fingerprint = hashlib.sha256(secret.encode('utf-8')).hexdigest()[:16]
 
-            # AWS allows two ABSK credentials per phantom user. The second key's
-            # decoded payload includes a +N marker (typically +1) appended to the
-            # IAM username. The marker is NOT part of the actual IAM username,
-            # so strip it before constructing user-facing identifiers.
+            # AWS allows up to 2 ABSK credentials per phantom; the secondary key's
+            # decoded payload appends a +N marker that is not part of the IAM username.
             if '+' in username_raw:
                 username, index_marker = username_raw.split('+', 1)
                 key_position = 'secondary'
@@ -113,11 +102,7 @@ class BedrockKeyDecoder:
 
     @staticmethod
     def decode_short_term_key(key: str) -> Dict:
-        """
-        Decode short-term Bedrock API key
-
-        Format: bedrock-api-key- + base64(SigV4 presigned URL)
-        """
+        """Decode short-term key. Format: bedrock-api-key- + base64(SigV4 presigned URL)."""
         try:
             encoded_part = key[len(BedrockKeyDecoder.SHORT_TERM_PREFIX):]
             decoded_bytes = base64.b64decode(encoded_part)

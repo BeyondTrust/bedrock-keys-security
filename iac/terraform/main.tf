@@ -1,8 +1,5 @@
-# Policy bodies are inlined via jsonencode() rather than file('../../scps/*.json')
-# so the module is self-contained when consumed as a remote source
-# (terraform copies only the module dir, not parent paths). The canonical
-# JSON-on-disk versions in /scps at the repo root remain in sync with the
-# bodies below; if you change one, update the other.
+# Policies are inlined (not loaded from ../../scps/*.json) so the module is
+# self-contained as a remote source. Keep bodies below in sync with /scps/*.json.
 
 locals {
   scps = {
@@ -113,7 +110,6 @@ locals {
 
   enabled_scps = { for k, v in local.scps : k => v if v.enabled }
 
-  # All enabled SCPs × all target OU IDs
   attachments = {
     for pair in setproduct(keys(local.enabled_scps), var.target_ou_ids) :
     "${pair[0]}-${pair[1]}" => { scp_key = pair[0], ou_id = pair[1] }

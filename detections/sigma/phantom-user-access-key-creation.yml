@@ -2,12 +2,10 @@ title: IAM Access Key Created On Bedrock Phantom User
 id: f8fe8f6d-d449-4d4a-a3d8-e136fc812362
 status: stable
 description: |
-    Detects creation of an IAM access key (AKIA*) on a phantom user provisioned
-    by a Bedrock long-term API key (BedrockAPIKey-*). This is the documented
-    privilege escalation path: an attacker who can call iam:CreateAccessKey
-    on the phantom user gains persistent IAM credentials inheriting
-    bedrock:*, iam:ListRoles, kms:DescribeKey, ec2:Describe*. The new
-    credentials persist after the original Bedrock key expires or is revoked.
+    Detects creation of an IAM access key (AKIA*) on a BedrockAPIKey-*
+    phantom user: the canonical privilege-escalation pivot. The new
+    credentials inherit AmazonBedrockLimitedAccess and persist after the
+    originating Bedrock key is revoked.
 references:
     - https://github.com/BeyondTrust/bedrock-keys-security#privilege-escalation
 author: BeyondTrust Phantom Labs

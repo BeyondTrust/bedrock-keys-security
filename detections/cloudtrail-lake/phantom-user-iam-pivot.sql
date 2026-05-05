@@ -1,16 +1,8 @@
 -- Phantom user IAM access key creation (privilege escalation pivot).
 --
--- An attacker who can call iam:CreateAccessKey on a BedrockAPIKey-* phantom
--- user inherits the user's bedrock:*, iam:ListRoles, kms:DescribeKey,
--- ec2:Describe* permissions and gains persistent AKIA credentials that
--- survive Bedrock key revocation.
---
--- CloudTrail Lake stores requestParameters and responseElements as
--- map<varchar,varchar> (not structs, not JSON strings). Top-level keys are
--- accessed with element_at(map, 'key'). Values that are themselves nested
--- objects are stored as JSON-stringified strings, so deep paths like
--- responseElements.accessKey.accessKeyId require JSON_EXTRACT_SCALAR over
--- the inner string.
+-- CloudTrail Lake stores requestParameters / responseElements as
+-- map<varchar,varchar>. Top-level keys: element_at(map, 'key'). Nested
+-- values are JSON-stringified, so deep paths need JSON_EXTRACT_SCALAR.
 --
 -- Replace <YOUR_EVENT_DATA_STORE_ID>.
 
