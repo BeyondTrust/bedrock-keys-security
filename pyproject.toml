@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bedrock-keys-security"
-version = "1.0.0"
+version = "1.1.0"
 description = "Find and contain phantom IAM users from AWS Bedrock keys: discovery, offline decoder, incident response, cleanup, preventive SCPs, and detection content."
 readme = "README.md"
 license = "Apache-2.0"
