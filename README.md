@@ -46,7 +46,7 @@ These phantom users are never automatically cleaned up. They accumulate over tim
 
 ![Attack Paths Diagram](https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/attack-paths.jpeg)
 
-**LLMjacking:** An attacker who obtains a leaked key can spin up workers across all AWS regions to consume foundation model capacity. Worst-case exposure depends on the default Bedrock service quota and the model price; for Claude Opus 4.7 at list pricing (May 2026), this works out to roughly $18,000/day per region. Refresh annually as Bedrock pricing changes.
+**LLMjacking:** An attacker who obtains a leaked key can spin up workers across all AWS regions to consume foundation model capacity. Worst-case exposure depends on the default Bedrock service quota and the model price; for Claude Opus 4.7 at list pricing (May 2026), this works out to roughly $18,000/day per region.
 
 ![LLMjacking Attack Flow](https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/llm-jacking.jpeg)
 
@@ -140,9 +140,9 @@ bks decode-key "bedrock-api-key-YmVkcm9ja..." --json
 
 Extracts the embedded IAM username, AWS account ID, region, and key format. Useful for triaging keys found on GitHub, Pastebin, or other public sources.
 
-![Long-term Key Decode](https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/long-term-key.png)
+<img src="https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/long-term-key.png" alt="Long-term Key Decode" width="600">
 
-![Short-term Key Decode](https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/short-term-key.png)
+<img src="https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/short-term-key.png" alt="Short-term Key Decode" width="600">
 
 ## Prevention with Service Control Policies
 
@@ -181,7 +181,7 @@ Both default to enabling `Block-Bedrock-API-Keys` plus `Block-Phantom-User-Escal
 
 ## Detection Content
 
-SOC-grade detection rules for the full attack chain are in [`detections/`](detections/): 6 Sigma rules, 2 CloudTrail Lake queries, 2 Athena queries, 5 EventBridge patterns, and 1 CloudWatch Insights query. Coverage spans bearer-token usage, key creation, phantom-user creation, AKIA escalation, cross-region fan-out, and suspicious user-agents.
+SIEM-ready detection rules for the full attack chain are in [`detections/`](detections/): 6 Sigma rules, 2 CloudTrail Lake queries, 2 Athena queries, 5 EventBridge patterns, and 1 CloudWatch Insights query. Coverage spans bearer-token usage, key creation, phantom-user creation, AKIA escalation, cross-region fan-out, and suspicious user-agents.
 
 ## Migration to STS
 
