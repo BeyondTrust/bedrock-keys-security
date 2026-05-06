@@ -44,6 +44,6 @@ def timeline(ctx, profile, region, username_or_key, days, all_regions, max_event
     )
 
     if output_json:
-        path = build_output_path("timeline", scanner.account_id, "json")
+        path = build_output_path("timeline", scanner.account_id, "json", output_dir=ctx.obj.output_dir)
         path.write_text(json.dumps(result, indent=2, default=str))
         click.echo(f"JSON saved: {path}")

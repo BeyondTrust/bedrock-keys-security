@@ -1,7 +1,9 @@
 """Click CLI entry point for bks (Bedrock Keys Security)"""
 
-import click
+from pathlib import Path
 from typing import Optional
+
+import click
 
 from bedrock_keys_security import __version__
 from bedrock_keys_security._version import get_commit
@@ -21,6 +23,7 @@ class Context:
         self.region: str = "us-east-1"
         self.verbose: bool = False
         self.quiet: bool = False
+        self.output_dir: Path = Path("output")
         self._scanner: Optional[PhantomUserScanner] = None
 
     @property
@@ -42,9 +45,12 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 @click.option('--quiet', '-q', is_flag=True,
               help='Suppress info / success / warning logs and the scan banner / table / summary. '
                    'Errors still go to stderr; saved-file paths still print to stdout. Useful for SOAR pipelines.')
+@click.option('--output-dir', 'output_dir', default='output', metavar='DIR',
+              help='Directory for JSON / CSV reports (default: ./output). '
+                   'Created if missing. Useful for SOAR pipelines that store reports under /var/log/bks or similar.')
 @click.version_option(_version_string, prog_name='bks')
 @click.pass_context
-def cli(ctx, profile, region, verbose, quiet):
+def cli(ctx, profile, region, verbose, quiet, output_dir):
     """Bedrock API Keys Security Toolkit (BKS).
 
     The AWS Bedrock API keys security toolkit. Includes a phantom user
@@ -59,6 +65,7 @@ def cli(ctx, profile, region, verbose, quiet):
     ctx.obj.region = region
     ctx.obj.verbose = verbose
     ctx.obj.quiet = quiet
+    ctx.obj.output_dir = Path(output_dir)
     if quiet:
         output.set_quiet(True)
 

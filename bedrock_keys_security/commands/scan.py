@@ -51,12 +51,12 @@ def scan(ctx, profile, region, output_json, output_csv, verbose, quiet_flag):
 
     saved = []
     if output_json:
-        path = build_output_path("scan", scanner.account_id, "json")
+        path = build_output_path("scan", scanner.account_id, "json", output_dir=ctx.obj.output_dir)
         path.write_text(scanner.generate_json_report(phantoms))
         saved.append(("JSON", path))
 
     if output_csv:
-        path = build_output_path("scan", scanner.account_id, "csv")
+        path = build_output_path("scan", scanner.account_id, "csv", output_dir=ctx.obj.output_dir)
         scanner.generate_csv_report(phantoms, str(path))
         saved.append(("CSV", path))
 

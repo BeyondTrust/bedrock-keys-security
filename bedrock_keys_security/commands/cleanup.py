@@ -34,7 +34,7 @@ def cleanup(ctx, profile, region, dry_run, force, output_json, quiet_flag):
     result = scanner.cleanup_orphaned_users(phantoms, dry_run=dry_run, force=force)
 
     if output_json:
-        path = build_output_path("cleanup", scanner.account_id, "json")
+        path = build_output_path("cleanup", scanner.account_id, "json", output_dir=ctx.obj.output_dir)
         path.write_text(json.dumps(result, indent=2, default=str))
         click.echo(f"JSON saved: {path}")
 

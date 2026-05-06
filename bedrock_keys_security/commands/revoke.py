@@ -48,7 +48,7 @@ def revoke_key(ctx, profile, region, username_or_key, dry_run, force, output_jso
         result = scanner.revoke_key(username, dry_run=dry_run, force=force)
 
     if output_json:
-        path = build_output_path("revoke", scanner.account_id, "json")
+        path = build_output_path("revoke", scanner.account_id, "json", output_dir=ctx.obj.output_dir)
         path.write_text(json.dumps(result, indent=2, default=str))
         click.echo(f"JSON saved: {path}")
 

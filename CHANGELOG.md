@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - `--quiet` / `-q` flag for SOAR pipelines. Suppresses banner, table and summary; saved-file paths still print to stdout; errors stay on stderr. Accepted at both group and per-command level (`bks --quiet scan` and `bks scan --quiet` are equivalent across all commands).
+- `--output-dir DIR` global flag (default `./output`) lets SOAR / cron operators redirect JSON / CSV reports to `/var/log/bks` or any other path. Directory is created if missing.
 - `--region` global flag (default `us-east-1`) plus per-command override.
 - Scan output ordered by status priority then creation date: AT RISK > ACTIVE > ORPHANED.
 - Scan completion footer with total IAM users, phantom count and elapsed time.

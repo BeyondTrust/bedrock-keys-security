@@ -2,6 +2,7 @@
 
 import json
 import sys
+
 import click
 
 from bedrock_keys_security.commands.scan import build_output_path
@@ -13,14 +14,15 @@ from bedrock_keys_security.utils.output import format_decode_table_output
 @click.argument('key')
 @click.option('--json', 'output_json', is_flag=True,
               help='Save decoded analysis as JSON to output/ directory')
-def decode_key(key, output_json):
+@click.pass_context
+def decode_key(ctx, key, output_json):
     """Decode Bedrock API key (no AWS credentials needed)"""
     raw = BedrockKeyDecoder.decode_key(key)
     result = redact_for_display(raw)
 
     if output_json:
         account_id = raw.get('account_id') or 'unknown'
-        path = build_output_path("decode", account_id, "json")
+        path = build_output_path("decode", account_id, "json", output_dir=ctx.obj.output_dir)
         path.write_text(json.dumps(result, indent=2))
         click.echo(f"JSON saved: {path}")
     else:

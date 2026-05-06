@@ -35,7 +35,7 @@ def report(ctx, profile, region, username_or_key, output_file, output_json, quie
 
     if output_json:
         data = scanner.collect_incident_data(username)
-        path = build_output_path("report", scanner.account_id, "json")
+        path = build_output_path("report", scanner.account_id, "json", output_dir=ctx.obj.output_dir)
         path.write_text(json.dumps(data, indent=2, default=str))
         click.echo(f"JSON saved: {path}")
         if output_file:

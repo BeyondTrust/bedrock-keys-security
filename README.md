@@ -38,7 +38,7 @@ AWS Bedrock API keys behave unlike regular AWS credentials. They authenticate vi
 
 The most damaging behavior: when a user creates a long-term Bedrock API key through the AWS Console, AWS silently provisions an IAM user named `BedrockAPIKey-xxxx` and attaches the [`AmazonBedrockLimitedAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonBedrockLimitedAccess.html) managed policy.
 
-Despite its name, the policy is effectively administrative: 47 `bedrock:*` actions covering create / read / update / delete across all Bedrock resources, plus cross-service reconnaissance (`iam:ListRoles`, `kms:DescribeKey`, `ec2:Describe{Vpcs,Subnets,SecurityGroups}`). Full action list in the AWS doc linked above.
+Despite its name, the policy is effectively administrative: 48 actions across `bedrock:*` (44) and `bedrock-mantle:*` (4) covering create / read / update / delete across all Bedrock resources, plus cross-service reconnaissance (`iam:ListRoles`, `kms:DescribeKey`, `ec2:Describe{Vpcs,Subnets,SecurityGroups}`). Full action list in the AWS doc linked above.
 
 These phantom users are never automatically cleaned up. They accumulate over time, creating an expanding attack surface that most organizations don't know exists.
 
@@ -134,7 +134,7 @@ Summary:
 Scan complete  127 IAM users  ·  3 phantoms  ·  1.4s
 ```
 
-JSON / CSV reports are written to `output/bks-scan-<account>-<UTC-timestamp>.<ext>` (the directory is created automatically). The JSON shape:
+JSON / CSV reports are written to `output/bks-scan-<account>-<UTC-timestamp>.<ext>` (the directory is created automatically). Override the destination with the global `--output-dir DIR` flag (e.g. `bks --output-dir /var/log/bks scan --json`). The JSON shape:
 
 ```json
 {
