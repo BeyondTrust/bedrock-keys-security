@@ -32,7 +32,7 @@ bks timeline BedrockAPIKey-xxxx --all-regions --days 30
 bks revoke-key BedrockAPIKey-xxxx
 ```
 
-Detection content (Sigma, CloudTrail Lake, Athena, EventBridge, CloudWatch Insights) lives in [`detections/`](detections/). Terraform and CloudFormation for the SCPs live alongside the policies under [`scps/`](scps/).
+Detection content (Sigma, CloudTrail Lake, Athena, EventBridge, CloudWatch Insights) lives in [`detections/`](detections/). SCP policies and their Terraform / CloudFormation modules live in [`scps/`](scps/).
 
 ## Motivation
 
