@@ -1,6 +1,6 @@
 # Detection Content
 
-Drop-in rules for Bedrock API key abuse and the phantom IAM user attack chain. Each file is independently deployable to your SIEM, EventBridge, CloudWatch Insights, CloudTrail Lake, or Athena.
+Drop-in rules for Bedrock API key abuse and the phantom IAM user attack chain. Each file is independently deployable to your SIEM, EventBridge, CloudWatch Insights, CloudTrail Lake or Athena.
 
 ## Sigma rules (`sigma/`)
 

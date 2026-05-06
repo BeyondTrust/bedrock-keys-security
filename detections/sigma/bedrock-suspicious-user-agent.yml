@@ -5,7 +5,7 @@ description: |
     Detects Bedrock API key usage from generic or scripted HTTP clients
     commonly observed in LLMjacking operations. Legitimate applications
     use AWS SDK user-agent strings; attackers running concurrent
-    asynchronous requests at volume use python-requests, aiohttp, or curl
+    asynchronous requests at volume use python-requests, aiohttp or curl
     defaults.
 references:
     - https://sysdig.com/blog/growing-dangers-of-llmjacking

@@ -79,7 +79,7 @@ locals {
     block_phantom_access_keys = {
       enabled     = var.enable_block_phantom_access_keys
       name        = "Block-Phantom-User-Escalation"
-      description = "Deny IAM access key, console login, and MFA on BedrockAPIKey-* phantom users."
+      description = "Deny IAM access key, console login and MFA on BedrockAPIKey-* phantom users."
       policy = jsonencode({
         Version = "2012-10-17"
         Statement = [

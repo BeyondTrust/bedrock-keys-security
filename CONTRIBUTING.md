@@ -146,15 +146,15 @@ Body explains why this change is needed: the constraint, incident, or
 rationale that prompted it. Reference issues with #N. Wrap at 72 cols.
 ```
 
-- **Use English.** All commits, comments, and PR descriptions.
+- **Use English.** All commits, comments and PR descriptions.
 - **No `Co-authored-by` trailers** unless someone genuinely co-authored the
   work. The signature already establishes accountability.
-- **One logical change per commit.** Refactors, fixes, and new features go
+- **One logical change per commit.** Refactors, fixes and new features go
   in separate commits within the same PR if related.
 
 ## What we're looking for
 
-- Bug fixes (especially flag-scoping, JSON serialization, or boto3 edge cases)
+- Bug fixes (especially flag-scoping, JSON serialization or boto3 edge cases)
 - Detection content additions (Sigma, CloudTrail Lake, Athena, Splunk)
 - IaC improvements (additional Terraform inputs, AWS Organizations
   StackSet templates)

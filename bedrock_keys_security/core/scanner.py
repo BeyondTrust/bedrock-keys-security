@@ -189,7 +189,7 @@ class PhantomUserScanner:
             }
 
     def categorize_status(self, user_data: Dict) -> str:
-        """Categorize user status: ACTIVE, ORPHANED, or AT RISK"""
+        """Categorize user status: ACTIVE, ORPHANED or AT RISK"""
         has_active_bedrock = user_data.get('active_bedrock_credentials', 0) > 0
         has_access_keys = user_data.get('active_access_keys', 0) > 0
 
@@ -338,7 +338,7 @@ class PhantomUserScanner:
 
         if not force and not click.confirm(
             click.style(
-                "This will immediately deny Bedrock, delete API keys, and disable IAM access keys. Continue?",
+                "This will immediately deny Bedrock, delete API keys and disable IAM access keys. Continue?",
                 fg="yellow",
             ),
             default=False,
@@ -501,7 +501,7 @@ class PhantomUserScanner:
             output.info(
                 "AWS does not allow attaching inline policies directly to SSO-managed roles. "
                 "Revoke at the right layer instead: disable / unassign the user in IAM Identity "
-                "Center, edit the permission set's inline policy, or apply an SCP at the org level."
+                "Center, edit the permission set's inline policy or apply an SCP at the org level."
             )
             return False
 

@@ -16,7 +16,7 @@ class BedrockKeyDecoder:
 
     @staticmethod
     def detect_key_type(key: str) -> Optional[str]:
-        """Return 'long-term', 'short-term', or None."""
+        """Return 'long-term', 'short-term' or None."""
         if key.startswith(BedrockKeyDecoder.LONG_TERM_PREFIX):
             return 'long-term'
         elif key.startswith(BedrockKeyDecoder.SHORT_TERM_PREFIX):

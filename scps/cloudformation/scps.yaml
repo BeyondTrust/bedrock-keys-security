@@ -101,7 +101,7 @@ Resources:
     Condition: CreatePhantomBlock
     Properties:
       Name: Block-Phantom-User-Escalation
-      Description: Deny IAM access key, console login, and MFA on BedrockAPIKey-* phantom users.
+      Description: Deny IAM access key, console login and MFA on BedrockAPIKey-* phantom users.
       Type: SERVICE_CONTROL_POLICY
       Content:
         Version: '2012-10-17'

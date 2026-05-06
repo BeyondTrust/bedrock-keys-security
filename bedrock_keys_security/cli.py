@@ -50,7 +50,7 @@ def cli(ctx, profile, region, verbose, quiet):
     The AWS Bedrock API keys security toolkit. Includes a phantom user
     scanner (BedrockAPIKey-* IAM users silently provisioned by Console
     long-term keys), an offline key decoder for ABSK and short-term keys,
-    incident response commands, and a report generator.
+    incident response commands and a report generator.
 
     Subcommands: scan, decode-key, timeline, revoke-key, report, cleanup.
     """

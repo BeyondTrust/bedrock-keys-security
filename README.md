@@ -2,7 +2,7 @@
 
 **The AWS Bedrock API keys security toolkit.**
 
-Offline key decoder, phantom user discovery, incident response, automated cleanup, preventive SCPs, and SIEM-ready detection content.
+Offline key decoder, phantom user discovery, incident response, automated cleanup, preventive SCPs and SIEM-ready detection content.
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -19,7 +19,7 @@ pip install bedrock-keys-security
 bks scan --profile your-aws-profile
 ```
 
-The default `bks scan` command discovers every `BedrockAPIKey-*` phantom user in the account, categorizes risk (`ACTIVE` / `ORPHANED` / `AT RISK`), and prints a summary table.
+The default `bks scan` command discovers every `BedrockAPIKey-*` phantom user in the account, categorizes risk (`ACTIVE` / `ORPHANED` / `AT RISK`) and prints a summary table.
 
 ```bash
 # Decode a leaked key offline (no AWS credentials needed)
@@ -52,7 +52,7 @@ These phantom users are never automatically cleaned up. They accumulate over tim
 
 ![LLMjacking Attack Flow](https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/llm-jacking.jpeg)
 
-**Privilege Escalation:** If an attacker creates an IAM access key on the phantom user, or if one already exists, they gain persistent IAM credentials (`AKIA...`) that extend well beyond Bedrock. From there, they can pivot to S3, Secrets Manager, and other services, even after the original Bedrock key expires.
+**Privilege Escalation:** If an attacker creates an IAM access key on the phantom user, or if one already exists, they gain persistent IAM credentials (`AKIA...`) that extend well beyond Bedrock. From there, they can pivot to S3, Secrets Manager and other services, even after the original Bedrock key expires.
 
 ## Installation
 
@@ -97,7 +97,7 @@ JSON / CSV reports are written to `output/bks-scan-<account>-<UTC-timestamp>.<ex
 Each phantom user is categorized by risk level:
 - **ACTIVE:** Has valid Bedrock API credentials
 - **ORPHANED:** No active credentials remaining (safe to delete)
-- **AT RISK:** Has IAM access keys that grant `bedrock:*`, recon permissions, and persist independently of the API key
+- **AT RISK:** Has IAM access keys that grant `bedrock:*`, recon permissions and persist independently of the API key
 
 <img src="https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/scan-example.png" alt="Scan Example" width="600">
 
@@ -127,7 +127,7 @@ bks report BedrockAPIKey-xxxx                     # full incident report
 bks report BedrockAPIKey-xxxx --output report.txt
 ```
 
-`revoke-key` applies an inline `Deny: bedrock:*` policy, deletes all Bedrock service-specific credentials, and disables IAM access keys (`AKIA*`) on the phantom user, closing the privilege-escalation pivot in the same operation.
+`revoke-key` applies an inline `Deny: bedrock:*` policy, deletes all Bedrock service-specific credentials and disables IAM access keys (`AKIA*`) on the phantom user, closing the privilege-escalation pivot in the same operation.
 
 `timeline --all-regions` is recommended whenever LLMjacking is suspected. Bedrock data-plane events (`InvokeModel`, `Converse`, `CallWithBearerToken`) are recorded in the region they ran, not the home region; a single-region timeline misses cross-region fan-out by design.
 
@@ -142,7 +142,7 @@ bks decode-key "ABSKQmVkcm9ja0FQSUtleS..."
 bks decode-key "bedrock-api-key-YmVkcm9ja..." --json
 ```
 
-Extracts the embedded IAM username, AWS account ID, region, and key format. Useful for triaging keys found on GitHub, Pastebin, or other public sources.
+Extracts the embedded IAM username, AWS account ID, region and key format. Useful for triaging keys found on GitHub, Pastebin or other public sources.
 
 <img src="https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/long-term-key.png" alt="Long-term Key Decode" width="600">
 
@@ -185,7 +185,7 @@ Both default to enabling `Block-Bedrock-API-Keys` plus `Block-Phantom-User-Escal
 
 ## Detection Content
 
-SIEM-ready detection rules for the full attack chain are in [`detections/`](detections/): 6 Sigma rules, 2 CloudTrail Lake queries, 2 Athena queries, 5 EventBridge patterns, and 1 CloudWatch Insights query. Coverage spans bearer-token usage, key creation, phantom-user creation, AKIA escalation, cross-region fan-out, and suspicious user-agents.
+SIEM-ready detection rules for the full attack chain are in [`detections/`](detections/): 6 Sigma rules, 2 CloudTrail Lake queries, 2 Athena queries, 5 EventBridge patterns and 1 CloudWatch Insights query. Coverage spans bearer-token usage, key creation, phantom-user creation, AKIA escalation, cross-region fan-out and suspicious user-agents.
 
 ## Migration to STS
 
@@ -209,7 +209,7 @@ export AWS_SESSION_TOKEN=...
 aws bedrock invoke-model --model-id anthropic.claude-opus-4-7...
 ```
 
-API keys may still be necessary for legacy applications hardcoded for bearer tokens, third-party tools without SigV4 support, or vendor software lacking STS integration. In those cases, use short-term keys with a maximum 12-hour lifetime and enforce restrictions with the SCPs above.
+API keys may still be necessary for legacy applications hardcoded for bearer tokens, third-party tools without SigV4 support or vendor software lacking STS integration. In those cases, use short-term keys with a maximum 12-hour lifetime and enforce restrictions with the SCPs above.
 
 **Further reading:** [BeyondTrust: AWS Bedrock API Keys Security Guide, Part 1](https://www.beyondtrust.com/blog/entry/aws-bedrock-security-api-keys).
 
@@ -221,7 +221,7 @@ API keys may still be necessary for legacy applications hardcoded for bearer tok
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, PR workflow, and review requirements.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, PR workflow and review requirements.
 
 ## License
 

@@ -2,7 +2,7 @@
 
 Covers the public surface used by `bks decode-key` and library callers:
 key-type detection, ABSK primary/secondary decoding, malformed input
-handling, short-term presigned-URL parsing, and the display-redaction
+handling, short-term presigned-URL parsing and the display-redaction
 helper. The decoder has no AWS dependencies, so these run fully offline.
 """
 
