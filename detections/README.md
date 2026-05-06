@@ -57,7 +57,32 @@ Five patterns. `bedrock-api-key-usage.json` targets `aws.bedrock` and catches ev
 
 ## Tuning notes
 
-- Rules assume CloudTrail management events are flowing. For Bedrock data-plane visibility (`InvokeModel`), enable Bedrock data events on the trail.
+- **Bedrock data events are NOT logged by default.** Management events (`CreateServiceSpecificCredential`, `CreateUser`, `CreateAccessKey`, etc.) ship to every trail automatically. Data-plane events (`InvokeModel`, `InvokeModelWithResponseStream`, `Converse`, `ConverseStream`, `Retrieve`, `RetrieveAndGenerate`) require an explicit data-event selector. Without it, the LLMjacking spike, suspicious user-agent, cross-region bearer, and spend-anomaly rules silently match nothing.
+
+  Verify your current selectors first to avoid wiping management coverage:
+
+  ```bash
+  aws cloudtrail get-event-selectors --trail-name <YOUR_TRAIL_NAME>
+  ```
+
+  Then add a Bedrock data-event selector alongside the existing management one:
+
+  ```bash
+  aws cloudtrail put-event-selectors \
+    --trail-name <YOUR_TRAIL_NAME> \
+    --advanced-event-selectors '[
+      {"Name": "Management events",
+       "FieldSelectors": [{"Field": "eventCategory", "Equals": ["Management"]}]},
+      {"Name": "Bedrock data events",
+       "FieldSelectors": [
+         {"Field": "eventCategory", "Equals": ["Data"]},
+         {"Field": "resources.type", "Equals": ["AWS::Bedrock::Model"]}
+       ]}
+    ]'
+  ```
+
+  Cost: $0.10 per 100k data events (per CloudTrail pricing). For LLMjacking visibility, non-optional. See [Bedrock CloudTrail logging](https://docs.aws.amazon.com/bedrock/latest/userguide/logging-using-cloudtrail.html) and [CloudTrail data events](https://docs.aws.amazon.com/awscloudtrail/latest/userguide/logging-data-events-with-cloudtrail.html#logging-data-events).
+
 - Thresholds (rate, region count, time window) are conservative defaults. Tune per environment volume.
 - `BedrockAPIKey-*` phantom users only exist for AWS Console-created long-term keys. STS-derived short-term bearer tokens do not create phantom users; aggregate by `userIdentity.principalId` to catch them.
 - Build the visibility baseline from `bedrock-bearer-token-usage.yml` first (it fires on every API key request), then layer the higher-confidence rules on top.
