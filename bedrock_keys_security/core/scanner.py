@@ -285,7 +285,7 @@ class PhantomUserScanner:
 
         for user in orphaned_users:
             created_date = user['created'].strftime('%Y-%m-%d')
-            click.echo(f"  \u2022 {user['username']} (created: {created_date})")
+            click.echo(f"  • {user['username']} (created: {created_date})")
 
         click.echo()
 
@@ -293,10 +293,10 @@ class PhantomUserScanner:
         if unsafe_users and not force:
             n_unsafe = len(unsafe_users)
             unsafe_word = "user" if n_unsafe == 1 else "users"
-            click.echo(output.red(f"\u26a0 Found {n_unsafe} {unsafe_word} with active credentials."))
+            click.echo(output.red(f"⚠ Found {n_unsafe} {unsafe_word} with active credentials."))
             click.echo(output.red("These will NOT be deleted for safety:"))
             for user in unsafe_users:
-                click.echo(f"  \u2022 {user['username']} ({user['status']})")
+                click.echo(f"  • {user['username']} ({user['status']})")
             click.echo()
 
         if not dry_run and not force:
@@ -329,7 +329,7 @@ class PhantomUserScanner:
 
     def revoke_key(self, username: str, dry_run: bool = False, force: bool = False) -> bool:
         """Emergency revocation: deny Bedrock, delete service-specific creds, disable IAM access keys"""
-        click.echo(f"\n{click.style('\u26a0\ufe0f  EMERGENCY KEY REVOCATION', fg='red', bold=True)}")
+        click.echo(f"\n{click.style('⚠️  EMERGENCY KEY REVOCATION', fg='red', bold=True)}")
         click.echo(f"{output.yellow(f'Username: {username}')}\n")
 
         if dry_run:
@@ -401,7 +401,7 @@ class PhantomUserScanner:
             elif disabled == 0:
                 output.info("All access keys already inactive")
 
-            click.echo(f"\n{click.style('\u2713 Key revocation complete', fg='green', bold=True)}")
+            click.echo(f"\n{click.style('✓ Key revocation complete', fg='green', bold=True)}")
             output.info(
                 "Verify: AWS_BEARER_TOKEN_BEDROCK=<key> aws bedrock list-foundation-models  "
                 "(expect AccessDenied)\n"
@@ -688,7 +688,7 @@ class PhantomUserScanner:
             line = f"{event_time} | {region:14} | {event_name:36} | {event_source:30} | IP: {source_ip}"
             if error_code:
                 click.echo(output.red(line))
-                click.echo(output.red(f"    \u2514\u2500 Error: {error_code}"))
+                click.echo(output.red(f"    └─ Error: {error_code}"))
             elif 'Delete' in event_name or 'Create' in event_name:
                 click.echo(output.yellow(line))
             else:
@@ -698,7 +698,7 @@ class PhantomUserScanner:
         from collections import Counter
         region_tally = Counter(e.get('_Region', self.region) for e in all_events)
         if len(region_tally) > 1:
-            click.echo(f"\n{output.bold('Region breakdown:')} {output.red('\u26a0 multi-region activity')}")
+            click.echo(f"\n{output.bold('Region breakdown:')} {output.red('⚠ multi-region activity')}")
             for region, count in region_tally.most_common():
                 click.echo(f"  {region:14} {count} events")
 
@@ -709,9 +709,9 @@ class PhantomUserScanner:
         """Generate comprehensive incident report for phantom user"""
         report_lines = []
 
-        report_lines.append("\u2550" * 80)
+        report_lines.append("═" * 80)
         report_lines.append("  AWS BEDROCK API KEY INCIDENT REPORT")
-        report_lines.append("\u2550" * 80)
+        report_lines.append("═" * 80)
         report_lines.append("")
         report_lines.append(f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
         report_lines.append(f"Username: {username}")
@@ -720,7 +720,7 @@ class PhantomUserScanner:
 
         try:
             report_lines.append("PHANTOM USER DETAILS")
-            report_lines.append("\u2500" * 80)
+            report_lines.append("─" * 80)
             user = self.iam.get_user(UserName=username)['User']
             report_lines.append(f"User ID: {user['UserId']}")
             report_lines.append(f"ARN: {user['Arn']}")
@@ -728,7 +728,7 @@ class PhantomUserScanner:
             report_lines.append("")
 
             report_lines.append("BEDROCK API CREDENTIALS")
-            report_lines.append("\u2500" * 80)
+            report_lines.append("─" * 80)
             creds = self.iam.list_service_specific_credentials(
                 UserName=username,
                 ServiceName='bedrock.amazonaws.com'
@@ -745,11 +745,11 @@ class PhantomUserScanner:
                 report_lines.append("")
 
             report_lines.append("IAM ACCESS KEYS (ESCALATION CHECK)")
-            report_lines.append("\u2500" * 80)
+            report_lines.append("─" * 80)
             access_keys = self.iam.list_access_keys(UserName=username)['AccessKeyMetadata']
 
             if access_keys:
-                report_lines.append(f"  \u26a0\ufe0f  WARNING: {len(access_keys)} IAM access {'key' if len(access_keys) == 1 else 'keys'} found!")
+                report_lines.append(f"  ⚠️  WARNING: {len(access_keys)} IAM access {'key' if len(access_keys) == 1 else 'keys'} found!")
                 for key in access_keys:
                     report_lines.append(f"    Key ID: {key['AccessKeyId']}")
                     report_lines.append(f"    Status: {key['Status']}")
@@ -760,7 +760,7 @@ class PhantomUserScanner:
                 report_lines.append("")
 
             report_lines.append("ATTACHED POLICIES")
-            report_lines.append("\u2500" * 80)
+            report_lines.append("─" * 80)
             attached = self.iam.list_attached_user_policies(UserName=username)['AttachedPolicies']
             inline = self.iam.list_user_policies(UserName=username)['PolicyNames']
 
@@ -780,7 +780,7 @@ class PhantomUserScanner:
             report_lines.append(f"ERROR: {e}")
             report_lines.append("")
 
-        report_lines.append("\u2550" * 80)
+        report_lines.append("═" * 80)
 
         report_content = '\n'.join(report_lines)
 

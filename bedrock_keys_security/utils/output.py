@@ -152,9 +152,9 @@ def format_decode_table_output(result: Dict) -> str:
         return f"\n{red('[ERROR] ' + result['error'])}\n"
 
     lines = []
-    lines.append(f"\n{bold('\u2500' * 60)}")
+    lines.append(f"\n{bold('─' * 60)}")
     lines.append(f"{bold(cyan('  Bedrock API Key Analysis'))}")
-    lines.append(f"{bold('\u2500' * 60)}")
+    lines.append(f"{bold('─' * 60)}")
 
     key_type = result.get("type", "Unknown")
     type_label = green("Long-term (ABSK)") if key_type == "long-term" else yellow("Short-term")
@@ -193,8 +193,8 @@ def format_decode_table_output(result: Dict) -> str:
     if "security_notes" in result and result["security_notes"]:
         lines.append(f"\n  {bold(yellow('Security Notes:'))}")
         for note in result["security_notes"]:
-            lines.append(f"  {yellow('  \u2022 ' + note)}")
+            lines.append(f"  {yellow('  • ' + note)}")
 
-    lines.append(f"{bold('\u2500' * 60)}\n")
+    lines.append(f"{bold('─' * 60)}\n")
 
     return "\n".join(lines)
