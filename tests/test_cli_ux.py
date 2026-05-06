@@ -21,8 +21,16 @@ from unittest.mock import MagicMock
 import click
 import pytest
 
+import base64
+import json
+import stat
+
+from click.testing import CliRunner
+
+from bedrock_keys_security.cli import cli
 from bedrock_keys_security.commands.scan import build_output_path
-from bedrock_keys_security.core.scanner import PhantomUserScanner
+from bedrock_keys_security.core.decoder import BedrockKeyDecoder
+from bedrock_keys_security.core.scanner import PhantomUserScanner, _csv_safe
 from bedrock_keys_security.utils import output
 
 
@@ -222,7 +230,8 @@ class TestBuildOutputPath:
         assert path.name.startswith(f"bks-{command}-123456789012-")
         assert path.name.endswith(".json")
         ts = path.stem.split("-")[-1]
-        assert len(ts) == len("YYYYMMDDTHHMMSSZ")
+        # Microsecond resolution: YYYYMMDDTHHMMSSffffffZ
+        assert len(ts) == len("YYYYMMDDTHHMMSSffffffZ")
         assert ts.endswith("Z")
 
     def test_creates_directory_when_missing(self, tmp_path):
@@ -235,3 +244,110 @@ class TestBuildOutputPath:
     def test_csv_extension(self, tmp_path):
         path = build_output_path("scan", "123456789012", "csv", output_dir=tmp_path)
         assert path.name.endswith(".csv")
+
+    def test_path_traversal_account_id_neutralized(self, tmp_path):
+        """A crafted ABSK key carrying an account_id like `../../etc/PWNED` must
+        not escape the output dir. build_output_path falls back to `unknown`."""
+        path = build_output_path("decode", "../../etc/PWNED", "json", output_dir=tmp_path)
+        assert path.parent == tmp_path
+        assert ".." not in path.name
+        assert "unknown" in path.name
+
+    def test_account_id_must_match_12_digits(self, tmp_path):
+        """Anything other than exactly 12 digits collapses to `unknown`."""
+        for bad in ["12345", "123456789012abc", "abc456789012", "", "1234567890123"]:
+            path = build_output_path("scan", bad, "json", output_dir=tmp_path)
+            assert "unknown" in path.name
+        # Sanity: a real 12-digit ID is preserved.
+        path = build_output_path("scan", "999999999999", "json", output_dir=tmp_path)
+        assert "999999999999" in path.name
+
+
+class TestCsvInjection:
+    def test_safe_strings_pass_through(self):
+        for v in ["BedrockAPIKey-h42z", "ACTIVE", "2026-03-12", "", None, 42]:
+            assert _csv_safe(v) == v
+
+    def test_dangerous_prefixes_get_quoted(self):
+        # Excel / Sheets formula triggers
+        assert _csv_safe("=cmd|'/c calc'!A1") == "'=cmd|'/c calc'!A1"
+        assert _csv_safe("+1+1") == "'+1+1"
+        assert _csv_safe("-2+3") == "'-2+3"
+        assert _csv_safe("@SUM(A1:A10)") == "'@SUM(A1:A10)"
+        assert _csv_safe("\tinjected") == "'\tinjected"
+        assert _csv_safe("\rinjected") == "'\rinjected"
+
+
+class TestCliRunnerIntegration:
+    """End-to-end CLI flag tests via Click's CliRunner. decode-key is offline,
+    so these run without AWS credentials or mocking."""
+
+    @staticmethod
+    def _make_long_term_key(payload: bytes) -> str:
+        return "ABSK" + base64.b64encode(payload).decode()
+
+    def test_decode_key_json_writes_redacted_file(self, tmp_path):
+        key = self._make_long_term_key(
+            b"BedrockAPIKey-h42z-at-123456789012:thisisasecretsecret123"
+        )
+        runner = CliRunner()
+        result = runner.invoke(cli, ['--output-dir', str(tmp_path), 'decode-key', key, '--json'])
+
+        assert result.exit_code == 0
+        assert "JSON saved:" in result.output
+
+        files = list(tmp_path.glob("bks-decode-*.json"))
+        assert len(files) == 1
+        data = json.loads(files[0].read_text())
+        assert data['username'] == 'BedrockAPIKey-h42z'
+        # Plaintext stripped, preview redacted
+        assert 'full_decoded' not in data
+        assert data.get('secret_preview') == '[REDACTED]'
+
+    def test_decode_key_json_neutralizes_path_traversal(self, tmp_path):
+        """Crafted ABSK key with account_id='../../etc/PWNED' must NOT escape output_dir."""
+        key = self._make_long_term_key(
+            b"BedrockAPIKey-x-at-../../../etc/PWNED:fakesecretsecret12345"
+        )
+        runner = CliRunner()
+        result = runner.invoke(cli, ['--output-dir', str(tmp_path), 'decode-key', key, '--json'])
+
+        assert result.exit_code == 0
+        # File must be inside tmp_path
+        files = list(tmp_path.rglob("bks-decode-*.json"))
+        assert len(files) == 1
+        assert files[0].parent == tmp_path
+        # Filename must NOT contain path-traversal segments
+        assert ".." not in files[0].name
+        assert "unknown" in files[0].name
+        # Forensic JSON content still records the raw account_id (informative)
+        data = json.loads(files[0].read_text())
+        assert data['account_id'] == '../../../etc/PWNED'
+
+    def test_decode_key_json_writes_with_0600_perms(self, tmp_path):
+        """JSON output should have 0600 permissions to avoid disclosure on shared hosts."""
+        key = self._make_long_term_key(
+            b"BedrockAPIKey-h42z-at-123456789012:thisisasecretsecret123"
+        )
+        runner = CliRunner()
+        result = runner.invoke(cli, ['--output-dir', str(tmp_path), 'decode-key', key, '--json'])
+        assert result.exit_code == 0
+        files = list(tmp_path.glob("bks-decode-*.json"))
+        assert len(files) == 1
+        perms = stat.S_IMODE(files[0].stat().st_mode)
+        assert perms == 0o600
+
+    def test_decode_key_no_json_prints_table(self):
+        key = self._make_long_term_key(
+            b"BedrockAPIKey-h42z-at-123456789012:thisisasecretsecret123"
+        )
+        runner = CliRunner()
+        result = runner.invoke(cli, ['decode-key', key])
+        assert result.exit_code == 0
+        assert 'Bedrock API Key Analysis' in result.output
+        assert 'BedrockAPIKey-h42z' in result.output
+
+    def test_decode_key_invalid_returns_nonzero(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ['decode-key', 'not-a-real-key'])
+        assert result.exit_code == 1

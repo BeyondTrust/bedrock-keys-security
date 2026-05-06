@@ -25,6 +25,21 @@ def _json_default(obj):
     raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
 
+_CSV_INJECTION_PREFIXES = ('=', '+', '-', '@', '\t', '\r')
+
+
+def _csv_safe(value):
+    """Neutralize Excel/Sheets formula injection by prefixing dangerous cells with `'`.
+
+    IAM allows `=` in usernames (charset `[\\w+=,.@-]`) so `BedrockAPIKey-=cmd|...`
+    is technically a valid user. Without this guard, `bks scan --csv` would emit
+    a row that triggers RCE in a SOC analyst's Excel on open.
+    """
+    if isinstance(value, str) and value and value[0] in _CSV_INJECTION_PREFIXES:
+        return "'" + value
+    return value
+
+
 class PhantomUserScanner:
     """
     Scanner for BedrockAPIKey-* phantom IAM users
@@ -1114,7 +1129,14 @@ class PhantomUserScanner:
         return json.dumps(report, indent=2, default=_json_default)
 
     def generate_csv_report(self, phantoms: List[Dict], output_file: str):
-        """Generate CSV report and save to file. Always writes (header-only if no phantoms)."""
+        """Generate CSV report and save to file. Always writes (header-only if no phantoms).
+
+        Cells starting with `= + - @ \\t \\r` are prefixed with `'` to neutralize
+        Excel / Google Sheets formula injection. IAM allows `=` in usernames
+        (charset `[\\w+=,.@-]`), so a hostile actor could plant a phantom user
+        named `BedrockAPIKey-=cmd|...` whose CSV row triggers RCE in the SOC
+        analyst's spreadsheet on open.
+        """
         fieldnames = [
             'username', 'user_id', 'created', 'status',
             'active_bedrock_credentials', 'bedrock_credentials',
@@ -1134,7 +1156,7 @@ class PhantomUserScanner:
                     row['attached_policies'] = ','.join(user.get('attached_policies', []))
                     row['inline_policies'] = ','.join(user.get('inline_policies', []))
 
-                    writer.writerow(row)
+                    writer.writerow({k: _csv_safe(v) for k, v in row.items()})
 
         except IOError as e:
             output.error(f"Failed to write CSV file: {e}")

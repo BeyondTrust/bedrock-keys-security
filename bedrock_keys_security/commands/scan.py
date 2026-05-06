@@ -1,5 +1,7 @@
 """Scan command - discover phantom IAM users"""
 
+import os
+import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,13 +13,34 @@ from bedrock_keys_security.utils.cli import aws_options, apply_aws_overrides, ap
 
 
 OUTPUT_DIR = Path("output")
+_ACCOUNT_ID_RE = re.compile(r"^\d{12}$")
 
 
 def build_output_path(command: str, account_id: str, ext: str, output_dir: Path = OUTPUT_DIR) -> Path:
-    """Return output/bks-<command>-<account>-<UTC compact ts>.<ext>; create dir if missing."""
+    """Return output/bks-<command>-<sanitized-account>-<UTC ts µs>.<ext>; create dir if missing.
+
+    `account_id` is validated against `^\\d{12}$` (AWS account ID shape). Values
+    that don't match (e.g. a crafted ABSK key with a path-traversal payload in
+    the embedded account field) fall back to `unknown` in the filename. The
+    forensic JSON content still records the raw value, but the filesystem
+    surface is bounded.
+
+    Microsecond resolution prevents filename collisions when concurrent runs
+    fire in the same second.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return output_dir / f"bks-{command}-{account_id}-{ts}.{ext}"
+    safe_account = account_id if _ACCOUNT_ID_RE.match(str(account_id)) else "unknown"
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    return output_dir / f"bks-{command}-{safe_account}-{ts}.{ext}"
+
+
+def write_secure(path: Path, content: str) -> None:
+    """Write text and chmod 0600 so JSON/CSV outputs aren't world-readable on shared hosts."""
+    path.write_text(content)
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
 
 
 @click.command()
@@ -52,12 +75,16 @@ def scan(ctx, profile, region, output_json, output_csv, verbose, quiet_flag):
     saved = []
     if output_json:
         path = build_output_path("scan", scanner.account_id, "json", output_dir=ctx.obj.output_dir)
-        path.write_text(scanner.generate_json_report(phantoms))
+        write_secure(path, scanner.generate_json_report(phantoms))
         saved.append(("JSON", path))
 
     if output_csv:
         path = build_output_path("scan", scanner.account_id, "csv", output_dir=ctx.obj.output_dir)
         scanner.generate_csv_report(phantoms, str(path))
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
         saved.append(("CSV", path))
 
     if not quiet:

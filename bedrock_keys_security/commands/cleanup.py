@@ -4,7 +4,7 @@ import json
 import sys
 import click
 
-from bedrock_keys_security.commands.scan import build_output_path
+from bedrock_keys_security.commands.scan import build_output_path, write_secure
 from bedrock_keys_security.utils import output
 from bedrock_keys_security.utils.cli import aws_options, apply_aws_overrides, apply_quiet_override, quiet_option
 
@@ -35,7 +35,7 @@ def cleanup(ctx, profile, region, dry_run, force, output_json, quiet_flag):
 
     if output_json:
         path = build_output_path("cleanup", scanner.account_id, "json", output_dir=ctx.obj.output_dir)
-        path.write_text(json.dumps(result, indent=2, default=str))
+        write_secure(path, json.dumps(result, indent=2, default=str))
         click.echo(f"JSON saved: {path}")
 
     sys.exit(0 if result['failed'] == 0 else 1)

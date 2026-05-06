@@ -5,7 +5,7 @@ import sys
 
 import click
 
-from bedrock_keys_security.commands.scan import build_output_path
+from bedrock_keys_security.commands.scan import build_output_path, write_secure
 from bedrock_keys_security.core.decoder import BedrockKeyDecoder, redact_for_display
 from bedrock_keys_security.utils.output import format_decode_table_output
 
@@ -21,9 +21,12 @@ def decode_key(ctx, key, output_json):
     result = redact_for_display(raw)
 
     if output_json:
+        # build_output_path validates account_id against ^\d{12}$ to neutralize
+        # path-traversal in crafted ABSK keys (e.g. account_id='../../etc').
+        # The raw value remains in the JSON content for forensic visibility.
         account_id = raw.get('account_id') or 'unknown'
         path = build_output_path("decode", account_id, "json", output_dir=ctx.obj.output_dir)
-        path.write_text(json.dumps(result, indent=2))
+        write_secure(path, json.dumps(result, indent=2))
         click.echo(f"JSON saved: {path}")
     else:
         click.echo(format_decode_table_output(result))

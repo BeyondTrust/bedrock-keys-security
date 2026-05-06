@@ -3,7 +3,7 @@
 import json
 import click
 
-from bedrock_keys_security.commands.scan import build_output_path
+from bedrock_keys_security.commands.scan import build_output_path, write_secure
 from bedrock_keys_security.utils.cli import (
     apply_aws_overrides,
     apply_quiet_override,
@@ -45,5 +45,5 @@ def timeline(ctx, profile, region, username_or_key, days, all_regions, max_event
 
     if output_json:
         path = build_output_path("timeline", scanner.account_id, "json", output_dir=ctx.obj.output_dir)
-        path.write_text(json.dumps(result, indent=2, default=str))
+        write_secure(path, json.dumps(result, indent=2, default=str))
         click.echo(f"JSON saved: {path}")

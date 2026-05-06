@@ -40,6 +40,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Decoder `security_notes` now carries only key-specific findings. The four generic ABSK education lines that fired on every long-term decode were removed; secondary keys keep the `+N` marker note.
 - README, detection rules and code comments scrubbed of em dashes and Oxford commas. Tier-2 and tier-3 dedup passes across `detections/README.md`, four Sigma descriptions, scanner and decoder docstrings.
 
+### Security
+
+- **Path traversal in `bks decode-key --json`** (high severity, internally found): the `account_id` parsed from a long-term ABSK key flowed unsanitized into the output filename. A crafted key with `account_id=../../etc/PWNED` could write the JSON forensic output anywhere the user has filesystem write access (e.g. `~/.ssh/authorized_keys`, `~/.bashrc`). `build_output_path` now validates `account_id` against `^\d{12}$` and falls back to `unknown` for any non-conforming value. The raw value is still recorded in the JSON content for forensic visibility.
+- **CSV injection in `bks scan --csv`** (medium severity): IAM allows `=` in usernames (charset `[\w+=,.@-]`), so a hostile actor with `iam:CreateUser` could plant `BedrockAPIKey-=cmd|...` whose row triggered RCE in a SOC analyst's Excel on open. Cells starting with `= + - @ \t \r` are now prefixed with `'` to neutralize formula evaluation.
+- **JSON / CSV outputs now written with `0600` permissions** to avoid disclosure on shared hosts. Reports include IAM usernames, ARNs, access key IDs, CloudTrail events with source IPs and user-agents, and policy details.
+- **Filename timestamp resolution upgraded from second to microsecond** (`bks-<command>-<account>-YYYYMMDDTHHMMSSffffffZ.<ext>`), eliminating silent overwrites when concurrent runs fire in the same second (real for SOAR pipelines and cron jobs).
+
 ### Fixed
 
 - Python 3.10 / 3.11 f-string compat: `\u` escapes inside f-string expression parts replaced with literal Unicode characters. PEP 701 relaxed this in 3.12; the issue was previously hidden by local Python 3.14 testing.
