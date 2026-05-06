@@ -1,10 +1,6 @@
-# Bedrock API Keys Security
+# The AWS Bedrock API keys security toolkit
 
-**The AWS Bedrock API keys security toolkit.**
-
-AWS Bedrock API keys behave nothing like regular AWS credentials. BKS finds, decodes and contains them.
-
-Offline key decoder, phantom user discovery, incident response, automated cleanup, preventive SCPs and SIEM-ready detection content.
+**tl;dr:** AWS Bedrock API keys behave nothing like regular AWS credentials. BKS includes an offline decoder, phantom user discovery, incident response, automated cleanup, preventive SCPs and SIEM-ready detection content.
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
