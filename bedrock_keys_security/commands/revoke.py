@@ -4,7 +4,13 @@ import sys
 import click
 
 from bedrock_keys_security.core.decoder import BedrockKeyDecoder
-from bedrock_keys_security.utils.cli import aws_options, apply_aws_overrides, resolve_username
+from bedrock_keys_security.utils.cli import (
+    apply_aws_overrides,
+    apply_quiet_override,
+    aws_options,
+    quiet_option,
+    resolve_username,
+)
 
 
 @click.command('revoke-key')
@@ -12,8 +18,9 @@ from bedrock_keys_security.utils.cli import aws_options, apply_aws_overrides, re
 @click.argument('username_or_key')
 @click.option('--dry-run', is_flag=True, help='Simulate revocation without executing')
 @click.option('--force', is_flag=True, help='Skip confirmation prompt (DANGEROUS)')
+@quiet_option
 @click.pass_context
-def revoke_key(ctx, profile, region, username_or_key, dry_run, force):
+def revoke_key(ctx, profile, region, username_or_key, dry_run, force, quiet_flag):
     """Emergency revocation of Bedrock API key.
 
     Accepts:
@@ -26,6 +33,7 @@ def revoke_key(ctx, profile, region, username_or_key, dry_run, force):
       aws:TokenIssueTime deny on that principal.
     """
     apply_aws_overrides(ctx, profile, region)
+    apply_quiet_override(ctx, quiet_flag)
 
     if username_or_key.startswith(BedrockKeyDecoder.SHORT_TERM_PREFIX):
         success = ctx.obj.scanner.revoke_short_term_key(username_or_key, dry_run=dry_run, force=force)

@@ -7,7 +7,7 @@ from pathlib import Path
 import click
 
 from bedrock_keys_security.utils import output
-from bedrock_keys_security.utils.cli import aws_options, apply_aws_overrides
+from bedrock_keys_security.utils.cli import aws_options, apply_aws_overrides, apply_quiet_override, quiet_option
 
 
 OUTPUT_DIR = Path("output")
@@ -27,17 +27,14 @@ def build_output_path(command: str, account_id: str, ext: str, output_dir: Path 
 @click.option('--csv', 'output_csv', is_flag=True,
               help='Save scan results as CSV to output/ directory')
 @click.option('--verbose', '-v', is_flag=True, help='Enable verbose log output during scan')
-@click.option('--quiet', '-q', 'quiet_flag', is_flag=True,
-              help='Suppress banner / table / summary (same as global --quiet)')
+@quiet_option
 @click.pass_context
 def scan(ctx, profile, region, output_json, output_csv, verbose, quiet_flag):
     """Scan for phantom IAM users (default command)"""
     apply_aws_overrides(ctx, profile, region)
+    apply_quiet_override(ctx, quiet_flag)
     if verbose:
         ctx.obj.verbose = True
-    if quiet_flag:
-        ctx.obj.quiet = True
-        output.set_quiet(True)
 
     scanner = ctx.obj.scanner
     quiet = ctx.obj.quiet

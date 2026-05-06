@@ -20,6 +20,21 @@ def apply_aws_overrides(ctx, profile, region):
         ctx.obj.region = region
 
 
+def quiet_option(f):
+    """Add --quiet/-q to a subcommand. Same flag exists at the group level; this allows
+    `bks <cmd> --quiet` and `bks --quiet <cmd>` to be equivalent."""
+    return click.option('--quiet', '-q', 'quiet_flag', is_flag=True,
+                        help='Suppress info logs (same as global --quiet)')(f)
+
+
+def apply_quiet_override(ctx, quiet_flag):
+    """Apply subcommand-level --quiet to the shared Context. Idempotent if global already set it."""
+    if quiet_flag:
+        from bedrock_keys_security.utils import output
+        ctx.obj.quiet = True
+        output.set_quiet(True)
+
+
 def resolve_username(value: str) -> str:
     """Accept an IAM username or a Bedrock API key; ABSK keys are decoded to their phantom username.
 

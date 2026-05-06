@@ -4,17 +4,19 @@ import sys
 import click
 
 from bedrock_keys_security.utils import output
-from bedrock_keys_security.utils.cli import aws_options, apply_aws_overrides
+from bedrock_keys_security.utils.cli import aws_options, apply_aws_overrides, apply_quiet_override, quiet_option
 
 
 @click.command()
 @aws_options
 @click.option('--dry-run', is_flag=True, help='Simulate cleanup without deleting')
 @click.option('--force', is_flag=True, help='Skip confirmation prompts (DANGEROUS)')
+@quiet_option
 @click.pass_context
-def cleanup(ctx, profile, region, dry_run, force):
+def cleanup(ctx, profile, region, dry_run, force, quiet_flag):
     """Delete orphaned phantom users"""
     apply_aws_overrides(ctx, profile, region)
+    apply_quiet_override(ctx, quiet_flag)
     scanner = ctx.obj.scanner
 
     click.echo(scanner.report_header())

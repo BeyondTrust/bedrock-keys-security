@@ -2,7 +2,13 @@
 
 import click
 
-from bedrock_keys_security.utils.cli import aws_options, apply_aws_overrides, resolve_username
+from bedrock_keys_security.utils.cli import (
+    apply_aws_overrides,
+    apply_quiet_override,
+    aws_options,
+    quiet_option,
+    resolve_username,
+)
 
 
 @click.command()
@@ -14,14 +20,16 @@ from bedrock_keys_security.utils.cli import aws_options, apply_aws_overrides, re
                    'data-plane events, which are recorded in the region where InvokeModel was called.')
 @click.option('--max-events', type=int, default=1000,
               help='Cap total events returned per region (default: 1000)')
+@quiet_option
 @click.pass_context
-def timeline(ctx, profile, region, username_or_key, days, all_regions, max_events):
+def timeline(ctx, profile, region, username_or_key, days, all_regions, max_events, quiet_flag):
     """Generate CloudTrail timeline for phantom user.
 
     Accepts either a phantom IAM username (BedrockAPIKey-xxxx) or a
     long-term ABSK key string.
     """
     apply_aws_overrides(ctx, profile, region)
+    apply_quiet_override(ctx, quiet_flag)
     username = resolve_username(username_or_key)
     ctx.obj.scanner.generate_timeline(
         username,
