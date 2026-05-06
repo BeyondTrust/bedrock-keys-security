@@ -295,6 +295,7 @@ Apache 2.0. See [LICENSE](LICENSE).
 
 ## References
 
+- [AWS Bedrock API Keys Security Guide, Part 1: Risks, Vulnerabilities and Attack Techniques](https://www.beyondtrust.com/blog/entry/aws-bedrock-security-api-keys) (BeyondTrust Phantom Labs)
 - [AWS Bedrock API Keys User Guide](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html)
 - [AWS Security Blog: Securing Bedrock API Keys](https://aws.amazon.com/blogs/security/securing-amazon-bedrock-api-keys-best-practices-for-implementation-and-management/)
 - [AWS SCP Examples for Bedrock](https://github.com/aws-samples/service-control-policy-examples/tree/main/Service-specific-controls/Amazon-Bedrock)
