@@ -2,6 +2,8 @@
 
 **The AWS Bedrock API keys security toolkit.**
 
+AWS Bedrock API keys behave nothing like regular AWS credentials. BKS finds, decodes and contains them.
+
 Offline key decoder, phantom user discovery, incident response, automated cleanup, preventive SCPs and SIEM-ready detection content.
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
@@ -19,7 +21,7 @@ pip install bedrock-keys-security
 bks scan --profile your-aws-profile
 ```
 
-The default `bks scan` command discovers every `BedrockAPIKey-*` phantom user in the account, categorizes risk (`ACTIVE` / `ORPHANED` / `AT RISK`) and prints a summary table.
+`bks scan` discovers every `BedrockAPIKey-*` phantom user in the account, categorizes risk (`AT RISK` / `ACTIVE` / `ORPHANED`) and prints a summary table.
 
 ```bash
 # Decode a leaked key offline (no AWS credentials needed)
@@ -36,9 +38,9 @@ Detection content (Sigma, CloudTrail Lake, Athena, EventBridge, CloudWatch Insig
 
 ## Motivation
 
-AWS Bedrock API keys behave unlike regular AWS credentials. They authenticate via bearer tokens instead of SigV4, they embed the AWS account ID and IAM username in plain base64, and, when generated as long-term keys through the AWS Console, they silently spawn an IAM user with broad permissions that the console never shows.
+AWS Bedrock API keys behave unlike regular AWS credentials. They authenticate via bearer tokens instead of SigV4, and they embed the AWS account ID and IAM username in plain base64.
 
-That last case is the most damaging. When a user creates a long-term Bedrock API key through the AWS Console, AWS silently provisions an IAM user named `BedrockAPIKey-xxxx` and attaches the [`AmazonBedrockLimitedAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonBedrockLimitedAccess.html) managed policy.
+The most damaging behavior: when a user creates a long-term Bedrock API key through the AWS Console, AWS silently provisions an IAM user named `BedrockAPIKey-xxxx` and attaches the [`AmazonBedrockLimitedAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonBedrockLimitedAccess.html) managed policy.
 
 Despite its name, the policy is effectively administrative: 47 `bedrock:*` actions covering create / read / update / delete across all Bedrock resources, plus cross-service reconnaissance (`iam:ListRoles`, `kms:DescribeKey`, `ec2:Describe{Vpcs,Subnets,SecurityGroups}`). Full action list in the AWS doc linked above.
 
@@ -53,6 +55,8 @@ These phantom users are never automatically cleaned up. They accumulate over tim
 ![LLMjacking Attack Flow](https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/llm-jacking.jpeg)
 
 **Privilege Escalation:** If an attacker creates an IAM access key on the phantom user, or if one already exists, they gain persistent IAM credentials (`AKIA...`) that extend well beyond Bedrock. From there, they can pivot to S3, Secrets Manager and other services, even after the original Bedrock key expires.
+
+> **Deep-dive:** [AWS Bedrock API Keys Security Guide, Part 1: Risks, Vulnerabilities and Attack Techniques](https://www.beyondtrust.com/blog/entry/aws-bedrock-security-api-keys) on the BeyondTrust Phantom Labs blog.
 
 ## Installation
 
@@ -92,12 +96,50 @@ bks scan --csv                # save CSV to output/
 bks scan --verbose            # detailed output
 ```
 
-JSON / CSV reports are written to `output/bks-scan-<account>-<UTC-timestamp>.<ext>` (the directory is created automatically).
+Example output:
+
+```
+bks v1.1.0  BedrockAPIKey-* phantom user scanner
+Account: 123456789012  Region: us-east-1
+
++--------------------+------------+-------------------+---------------+----------+
+| Username           | Created    |   Active API Keys |   Access Keys | Status   |
++====================+============+===================+===============+==========+
+| BedrockAPIKey-h42z | 2026-03-12 |                 1 |             2 | AT RISK  |
+| BedrockAPIKey-x8q1 | 2026-04-22 |                 1 |             0 | ACTIVE   |
+| BedrockAPIKey-aaa1 | 2025-11-08 |                 0 |             0 | ORPHANED |
++--------------------+------------+-------------------+---------------+----------+
+
+Summary:
+  Total phantom users: 3
+  At Risk: 1 (IAM access keys found)
+  Active: 1 (live Bedrock API keys)
+  Orphaned: 1 (safe to cleanup)
+
+Scan complete  127 IAM users  ·  3 phantoms  ·  1.4s
+```
+
+JSON / CSV reports are written to `output/bks-scan-<account>-<UTC-timestamp>.<ext>` (the directory is created automatically). The JSON shape:
+
+```json
+{
+  "scan_metadata": {
+    "account_id": "123456789012",
+    "region": "us-east-1",
+    "scan_time": "2026-05-06T14:30:22+00:00",
+    "caller_arn": "arn:aws:iam::123456789012:user/security"
+  },
+  "summary": { "total": 3, "active": 1, "orphaned": 1, "at_risk": 1 },
+  "phantom_users": [
+    { "username": "BedrockAPIKey-h42z", "status": "AT RISK", "created": "2026-03-12T09:14:08+00:00", "...": "..." }
+  ]
+}
+```
 
 Each phantom user is categorized by risk level:
+- **AT RISK:** Has IAM access keys with `bedrock:*` and recon permissions. Revoking the Bedrock key does not disable them.
 - **ACTIVE:** Has valid Bedrock API credentials
 - **ORPHANED:** No active credentials remaining (safe to delete)
-- **AT RISK:** Has IAM access keys that grant `bedrock:*`, recon permissions and persist independently of the API key
 
 <img src="https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/scan-example.png" alt="Scan Example" width="600">
 
@@ -144,9 +186,9 @@ bks decode-key "bedrock-api-key-YmVkcm9ja..." --json
 
 Extracts the embedded IAM username, AWS account ID, region and key format. Useful for triaging keys found on GitHub, Pastebin or other public sources.
 
-<img src="https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/long-term-key.png" alt="Long-term Key Decode" width="600">
+<img src="https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/long-term-key.png" alt="Long-term Key Decode" width="480">
 
-<img src="https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/short-term-key.png" alt="Short-term Key Decode" width="600">
+<img src="https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/short-term-key.png" alt="Short-term Key Decode" width="480">
 
 ## Prevention with Service Control Policies
 
@@ -206,12 +248,10 @@ export AWS_ACCESS_KEY_ID=ASIA...
 export AWS_SECRET_ACCESS_KEY=...
 export AWS_SESSION_TOKEN=...
 
-aws bedrock invoke-model --model-id anthropic.claude-opus-4-7...
+aws bedrock-runtime invoke-model --model-id us.anthropic.claude-opus-4-7 ...
 ```
 
 API keys may still be necessary for legacy applications hardcoded for bearer tokens, third-party tools without SigV4 support or vendor software lacking STS integration. In those cases, use short-term keys with a maximum 12-hour lifetime and enforce restrictions with the SCPs above.
-
-**Further reading:** [BeyondTrust: AWS Bedrock API Keys Security Guide, Part 1](https://www.beyondtrust.com/blog/entry/aws-bedrock-security-api-keys).
 
 ## Talks
 
