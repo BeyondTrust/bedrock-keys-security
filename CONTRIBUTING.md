@@ -14,21 +14,9 @@ source venv/bin/activate
 pip install -e .
 ```
 
-## Branch protection rules (read first)
+## Branch protection rules
 
-The `main` branch is protected by a Repository ruleset. Your PR will be
-**blocked from merging** until all of these are satisfied:
-
-| Requirement | What it means for you |
-|---|---|
-| **Required signatures** | Every commit you push must be cryptographically signed (GPG or SSH). Unsigned commits will block the merge regardless of approvals. |
-| **2 approving reviews** | At least two reviewers must approve the latest pushed commit. |
-| **Code-owner review** | A member of `@beyondtrust/research` must be one of the approvers. |
-| **Linear history** | No merge commits in the PR branch. Rebase, don't merge from upstream. |
-| **Squash merge only** | The PR is squashed into a single commit on `main` at merge time. |
-| **CodeQL must pass** | The Python and Actions analysis workflows must complete with no high-severity alerts. |
-| **Stale review dismissal** | Force-pushing dismisses prior approvals; reviewers must re-approve the new HEAD. |
-| **Last-push approval required** | The latest commit must itself be approved (a stale approval on an earlier commit doesn't count). |
+`main` is protected by a [Repository ruleset](https://github.com/BeyondTrust/bedrock-keys-security/rules) requiring signed commits, two approving reviews (one from `@beyondtrust/research`), linear history, squash-only merge, and CodeQL passing. Force-pushing dismisses prior approvals.
 
 ## Set up commit signing
 

@@ -1,7 +1,9 @@
 """Timeline command - CloudTrail timeline generation"""
 
+import json
 import click
 
+from bedrock_keys_security.commands.scan import build_output_path
 from bedrock_keys_security.utils.cli import (
     apply_aws_overrides,
     apply_quiet_override,
@@ -20,9 +22,11 @@ from bedrock_keys_security.utils.cli import (
                    'data-plane events, which are recorded in the region where InvokeModel was called.')
 @click.option('--max-events', type=int, default=1000,
               help='Cap total events returned per region (default: 1000)')
+@click.option('--json', 'output_json', is_flag=True,
+              help='Save timeline result as JSON to output/ directory')
 @quiet_option
 @click.pass_context
-def timeline(ctx, profile, region, username_or_key, days, all_regions, max_events, quiet_flag):
+def timeline(ctx, profile, region, username_or_key, days, all_regions, max_events, output_json, quiet_flag):
     """Generate CloudTrail timeline for phantom user.
 
     Accepts either a phantom IAM username (BedrockAPIKey-xxxx) or a
@@ -31,9 +35,15 @@ def timeline(ctx, profile, region, username_or_key, days, all_regions, max_event
     apply_aws_overrides(ctx, profile, region)
     apply_quiet_override(ctx, quiet_flag)
     username = resolve_username(username_or_key)
-    ctx.obj.scanner.generate_timeline(
+    scanner = ctx.obj.scanner
+    result = scanner.generate_timeline(
         username,
         days=days,
         all_regions=all_regions,
         max_events=max_events,
     )
+
+    if output_json:
+        path = build_output_path("timeline", scanner.account_id, "json")
+        path.write_text(json.dumps(result, indent=2, default=str))
+        click.echo(f"JSON saved: {path}")

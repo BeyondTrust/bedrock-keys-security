@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `bks scan --json` and `bks scan --csv` now write to `output/bks-scan-<account>-<UTC>.<ext>` instead of streaming JSON to stdout or requiring `--csv FILE`. SOAR pipelines should read the file path from the final stdout line (`JSON saved: ...`).
 - `bks scan --csv` is now flag-only. The previous `--csv <FILE>` form is no longer accepted.
 - `bks decode-key --json` now writes `output/bks-decode-<account>-<UTC>.json` instead of streaming JSON to stdout.
+- `bks cleanup --json`, `bks revoke-key --json`, `bks timeline --json` and `bks report --json` are new in this release; each writes a structured JSON result to `output/bks-<command>-<account>-<UTC>.json`. `scanner.revoke_key`, `scanner.revoke_short_term_key`, `scanner.cleanup_orphaned_users` and `scanner.generate_timeline` now return `Dict` instead of the previous `bool` / `None` / partial-`Dict` shapes.
 - IaC modules moved from `iac/` to `scps/`. Terraform consumers using `source = "github.com/BeyondTrust/bedrock-keys-security//iac/terraform"` must update to `//scps/terraform`. CloudFormation template path: `scps/cloudformation/scps.yaml`.
 
 ### Added

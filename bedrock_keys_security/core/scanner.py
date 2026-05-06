@@ -266,75 +266,121 @@ class PhantomUserScanner:
             return False
 
     def cleanup_orphaned_users(self, phantoms: List[Dict], dry_run: bool = False, force: bool = False) -> Dict:
-        """Clean up orphaned phantom users (no active credentials)"""
+        """Clean up orphaned phantom users (no active credentials).
+
+        Returns a structured Dict suitable for JSON serialization:
+            {
+                "dry_run": bool,
+                "total_orphaned": int,
+                "deleted_users": [str, ...],
+                "failed_users": [str, ...],
+                "skipped_users": [str, ...],   # safety-skipped (ACTIVE / AT RISK)
+                "deleted": int, "failed": int, "total": int   # legacy keys for callers
+            }
+        """
         orphaned_users = [u for u in phantoms if u['status'] == 'ORPHANED']
+        unsafe_users = [u for u in phantoms if u['status'] in ('ACTIVE', 'AT RISK')]
+
+        result: Dict = {
+            "dry_run": dry_run,
+            "total_orphaned": len(orphaned_users),
+            "deleted_users": [],
+            "failed_users": [],
+            "skipped_users": [u['username'] for u in unsafe_users],
+        }
 
         if not orphaned_users:
-            click.echo(f"\n{output.green('No orphaned phantom users found. Nothing to clean up.')}\n")
-            return {'total': 0, 'deleted': 0, 'failed': 0}
+            if not output._quiet_mode:
+                click.echo(f"\n{output.green('No orphaned phantom users found. Nothing to clean up.')}\n")
+            result.update({'total': 0, 'deleted': 0, 'failed': 0})
+            return result
 
         n_orphaned = len(orphaned_users)
-        orphaned_word = "User" if n_orphaned == 1 else "Users"
-        click.echo(f"\n{output.bold(f'Orphaned Phantom {orphaned_word} Found: {n_orphaned}')}")
-        unsafe_msg = (
-            "This user has no active credentials and can be safely deleted:"
-            if n_orphaned == 1
-            else "The following users have no active credentials and can be safely deleted:"
-        )
-        click.echo(f"{output.yellow(unsafe_msg)}\n")
+        if not output._quiet_mode:
+            orphaned_word = "User" if n_orphaned == 1 else "Users"
+            click.echo(f"\n{output.bold(f'Orphaned Phantom {orphaned_word} Found: {n_orphaned}')}")
+            unsafe_msg = (
+                "This user has no active credentials and can be safely deleted:"
+                if n_orphaned == 1
+                else "The following users have no active credentials and can be safely deleted:"
+            )
+            click.echo(f"{output.yellow(unsafe_msg)}\n")
 
-        for user in orphaned_users:
-            created_date = user['created'].strftime('%Y-%m-%d')
-            click.echo(f"  • {user['username']} (created: {created_date})")
+            for user in orphaned_users:
+                created_date = user['created'].strftime('%Y-%m-%d')
+                click.echo(f"  • {user['username']} (created: {created_date})")
 
-        click.echo()
-
-        unsafe_users = [u for u in phantoms if u['status'] in ['ACTIVE', 'AT RISK']]
-        if unsafe_users and not force:
-            n_unsafe = len(unsafe_users)
-            unsafe_word = "user" if n_unsafe == 1 else "users"
-            click.echo(output.red(f"⚠ Found {n_unsafe} {unsafe_word} with active credentials."))
-            click.echo(output.red("These will NOT be deleted for safety:"))
-            for user in unsafe_users:
-                click.echo(f"  • {user['username']} ({user['status']})")
             click.echo()
+
+            if unsafe_users and not force:
+                n_unsafe = len(unsafe_users)
+                unsafe_word = "user" if n_unsafe == 1 else "users"
+                click.echo(output.red(f"⚠ Found {n_unsafe} {unsafe_word} with active credentials."))
+                click.echo(output.red("These will NOT be deleted for safety:"))
+                for user in unsafe_users:
+                    click.echo(f"  • {user['username']} ({user['status']})")
+                click.echo()
 
         if not dry_run and not force:
             if not click.confirm(click.style(f"Delete {len(orphaned_users)} orphaned phantom {'user' if len(orphaned_users) == 1 else 'users'}?", fg="yellow"), default=False):
                 output.info("Cleanup cancelled by user.")
-                return {'total': len(orphaned_users), 'deleted': 0, 'failed': 0}
+                result.update({'total': len(orphaned_users), 'deleted': 0, 'failed': 0})
+                return result
 
-        stats = {'total': len(orphaned_users), 'deleted': 0, 'failed': 0}
-
-        click.echo()
+        if not output._quiet_mode:
+            click.echo()
         for user in orphaned_users:
             success = self.delete_phantom_user(user['username'], dry_run=dry_run)
             if success:
-                stats['deleted'] += 1
+                result['deleted_users'].append(user['username'])
             else:
-                stats['failed'] += 1
+                result['failed_users'].append(user['username'])
 
-        click.echo(f"\n{output.bold('Cleanup Summary:')}")
+        if not output._quiet_mode:
+            click.echo(f"\n{output.bold('Cleanup Summary:')}")
+            if dry_run:
+                click.echo(f"  {output.yellow('Mode: DRY-RUN (simulation only)')}")
+            click.echo(f"  Total orphaned users: {len(orphaned_users)}")
+            n_deleted = len(result['deleted_users'])
+            click.echo(f"  {output.green(f'Successfully deleted: {n_deleted}')}")
+            if result['failed_users']:
+                n_failed = len(result['failed_users'])
+                click.echo(f"  {output.red(f'Failed: {n_failed}')}")
+            click.echo()
+
+        # Legacy keys for callers that read result['failed'] / result['deleted'] / result['total']
+        result['total'] = len(orphaned_users)
+        result['deleted'] = len(result['deleted_users'])
+        result['failed'] = len(result['failed_users'])
+        return result
+
+    def revoke_key(self, username: str, dry_run: bool = False, force: bool = False) -> Dict:
+        """Emergency revocation: deny Bedrock, delete service-specific creds, disable IAM access keys.
+
+        Returns a structured Dict:
+            {
+                "username": str, "key_kind": "long-term", "dry_run": bool,
+                "actions": [{"action": str, ..., "success": bool}, ...],
+                "success": bool, "cancelled"?: bool, "error"?: str,
+            }
+        """
+        result: Dict = {
+            "username": username,
+            "key_kind": "long-term",
+            "dry_run": dry_run,
+            "actions": [],
+            "success": False,
+        }
+
+        if not output._quiet_mode:
+            click.echo(f"\n{click.style('⚠️  EMERGENCY KEY REVOCATION', fg='red', bold=True)}")
+            click.echo(f"{output.yellow(f'Username: {username}')}\n")
+
         if dry_run:
-            click.echo(f"  {output.yellow('Mode: DRY-RUN (simulation only)')}")
-        click.echo(f"  Total orphaned users: {stats['total']}")
-        deleted = stats['deleted']
-        click.echo(f"  {output.green(f'Successfully deleted: {deleted}')}")
-        if stats['failed'] > 0:
-            failed = stats['failed']
-            click.echo(f"  {output.red(f'Failed: {failed}')}")
-        click.echo()
-
-        return stats
-
-    def revoke_key(self, username: str, dry_run: bool = False, force: bool = False) -> bool:
-        """Emergency revocation: deny Bedrock, delete service-specific creds, disable IAM access keys"""
-        click.echo(f"\n{click.style('⚠️  EMERGENCY KEY REVOCATION', fg='red', bold=True)}")
-        click.echo(f"{output.yellow(f'Username: {username}')}\n")
-
-        if dry_run:
-            click.echo(output.yellow(f"[DRY-RUN] Would revoke all Bedrock API keys and disable IAM access keys for: {username}"))
-            return True
+            if not output._quiet_mode:
+                click.echo(output.yellow(f"[DRY-RUN] Would revoke all Bedrock API keys and disable IAM access keys for: {username}"))
+            result["success"] = True
+            return result
 
         if not force and not click.confirm(
             click.style(
@@ -344,11 +390,11 @@ class PhantomUserScanner:
             default=False,
         ):
             output.info("Revocation cancelled.")
-            return False
+            result["cancelled"] = True
+            return result
 
         try:
             output.info("Applying inline deny policy...")
-
             policy_name = f"EmergencyRevocation-{int(datetime.now(timezone.utc).timestamp())}"
             policy_document = {
                 "Version": "2012-10-17",
@@ -356,30 +402,34 @@ class PhantomUserScanner:
                     "Sid": "DenyBedrockAPIKeyUsage",
                     "Effect": "Deny",
                     "Action": "bedrock:*",
-                    "Resource": "*"
-                }]
+                    "Resource": "*",
+                }],
             }
-
             self.iam.put_user_policy(
                 UserName=username,
                 PolicyName=policy_name,
-                PolicyDocument=json.dumps(policy_document)
+                PolicyDocument=json.dumps(policy_document),
             )
             output.success(f"Deny policy applied: {policy_name}")
+            result["actions"].append({"action": "deny_policy", "policy_name": policy_name, "success": True})
 
             output.info("Deleting Bedrock API credentials...")
-
             creds = self.iam.list_service_specific_credentials(
                 UserName=username,
-                ServiceName='bedrock.amazonaws.com'
+                ServiceName='bedrock.amazonaws.com',
             )['ServiceSpecificCredentials']
 
             for cred in creds:
                 self.iam.delete_service_specific_credential(
                     UserName=username,
-                    ServiceSpecificCredentialId=cred['ServiceSpecificCredentialId']
+                    ServiceSpecificCredentialId=cred['ServiceSpecificCredentialId'],
                 )
                 output.success(f"Deleted credential: {cred['ServiceSpecificCredentialId']}")
+                result["actions"].append({
+                    "action": "delete_ssc",
+                    "credential_id": cred['ServiceSpecificCredentialId'],
+                    "success": True,
+                })
 
             if not creds:
                 output.info("No active Bedrock credentials found")
@@ -395,22 +445,30 @@ class PhantomUserScanner:
                         Status='Inactive',
                     )
                     output.success(f"Disabled access key: {key['AccessKeyId']}")
+                    result["actions"].append({
+                        "action": "disable_access_key",
+                        "access_key_id": key['AccessKeyId'],
+                        "success": True,
+                    })
                     disabled += 1
             if not access_keys:
                 output.info("No IAM access keys found")
             elif disabled == 0:
                 output.info("All access keys already inactive")
 
-            click.echo(f"\n{click.style('✓ Key revocation complete', fg='green', bold=True)}")
-            output.info(
-                "Verify: AWS_BEARER_TOKEN_BEDROCK=<key> aws bedrock list-foundation-models  "
-                "(expect AccessDenied)\n"
-            )
-            return True
+            if not output._quiet_mode:
+                click.echo(f"\n{click.style('✓ Key revocation complete', fg='green', bold=True)}")
+                output.info(
+                    "Verify: AWS_BEARER_TOKEN_BEDROCK=<key> aws bedrock list-foundation-models  "
+                    "(expect AccessDenied)\n"
+                )
+            result["success"] = True
+            return result
 
         except ClientError as e:
             output.error(f"Revocation failed: {e}")
-            return False
+            result["error"] = str(e)
+            return result
 
     def _issuer_matches_caller(self, issuer_arn: str, issuer_kind: str) -> bool:
         """Return True when the issuer principal is the same one the caller authenticated as.
@@ -457,30 +515,50 @@ class PhantomUserScanner:
             output.warning(f"CloudTrail lookup failed: {e}")
         return None, None, None
 
-    def revoke_short_term_key(self, key: str, dry_run: bool = False, force: bool = False) -> bool:
+    def revoke_short_term_key(self, key: str, dry_run: bool = False, force: bool = False) -> Dict:
         """Apply aws:TokenIssueTime deny on the principal that issued an STS bearer token.
 
         Refuses on SSO-managed roles (PutRolePolicy not allowed) and on self-revoke
         (would kill the caller's own session) unless --force is passed.
+
+        Returns a structured Dict:
+            {
+                "key_kind": "short-term", "dry_run": bool, "actions": [...],
+                "access_key_id"?: str, "issuer_arn"?: str, "issuer_name"?: str,
+                "issuer_kind"?: str, "self_revoke"?: bool,
+                "success": bool, "cancelled"?: bool, "error"?: str,
+            }
         """
         from bedrock_keys_security.core.decoder import BedrockKeyDecoder
 
-        click.echo(f"\n{click.style('⚠️  EMERGENCY TOKEN REVOCATION (short-term)', fg='red', bold=True)}")
+        result: Dict = {
+            "key_kind": "short-term",
+            "dry_run": dry_run,
+            "actions": [],
+            "success": False,
+        }
+
+        if not output._quiet_mode:
+            click.echo(f"\n{click.style('⚠️  EMERGENCY TOKEN REVOCATION (short-term)', fg='red', bold=True)}")
 
         decoded = BedrockKeyDecoder.decode_short_term_key(key)
         if 'error' in decoded:
             output.error(f"Could not decode key: {decoded['error']}")
-            return False
+            result["error"] = decoded['error']
+            return result
 
         access_key_id = decoded.get('access_key_id', 'Unknown')
         account_id = decoded.get('account_id', 'Unknown')
         region = decoded.get('region', 'Unknown')
+        result["access_key_id"] = access_key_id
 
-        click.echo(output.cyan(f"  Access key: {access_key_id}  account: {account_id}  region: {region}"))
+        if not output._quiet_mode:
+            click.echo(output.cyan(f"  Access key: {access_key_id}  account: {account_id}  region: {region}"))
 
         if not access_key_id.startswith('ASIA'):
             output.error("Decoded access key isn't an STS temporary credential (expected ASIA*).")
-            return False
+            result["error"] = "not an STS temporary credential"
+            return result
 
         output.info("Looking up issuing principal via CloudTrail...")
         issuer_arn, issuer_name, issuer_kind = self._find_short_term_issuer(access_key_id)
@@ -489,9 +567,15 @@ class PhantomUserScanner:
             output.info("No usage events found for this access key. The key may not have been used yet, "
                         "or coverage gaps exist. Use CloudTrail Lake / Athena with "
                         "responseElements.credentials.accessKeyId match to find the issuance event manually.")
-            return False
+            result["error"] = "issuing principal not found in CloudTrail"
+            return result
 
-        click.echo(output.cyan(f"  Issuing principal: {issuer_arn}  ({issuer_kind})"))
+        result["issuer_arn"] = issuer_arn
+        result["issuer_name"] = issuer_name
+        result["issuer_kind"] = issuer_kind
+
+        if not output._quiet_mode:
+            click.echo(output.cyan(f"  Issuing principal: {issuer_arn}  ({issuer_kind})"))
 
         if issuer_kind == 'role' and (
             'aws-reserved/sso.amazonaws.com' in issuer_arn
@@ -503,10 +587,12 @@ class PhantomUserScanner:
                 "Revoke at the right layer instead: disable / unassign the user in IAM Identity "
                 "Center, edit the permission set's inline policy or apply an SCP at the org level."
             )
-            return False
+            result["error"] = "SSO-managed role; PutRolePolicy not allowed"
+            return result
 
         self_revoke = self._issuer_matches_caller(issuer_arn, issuer_kind)
-        if self_revoke:
+        result["self_revoke"] = self_revoke
+        if self_revoke and not output._quiet_mode:
             click.echo(output.red(
                 "⚠️  Self-revoke detected: this issuer is the same principal you are authenticated as. "
                 "Applying the deny will kill this bks session and any concurrent sessions using the "
@@ -514,15 +600,18 @@ class PhantomUserScanner:
             ))
 
         if dry_run:
-            click.echo(output.yellow(
-                f"\n[DRY-RUN] Would apply aws:TokenIssueTime deny on {issuer_kind} '{issuer_name}'"
-            ))
-            return True
+            if not output._quiet_mode:
+                click.echo(output.yellow(
+                    f"\n[DRY-RUN] Would apply aws:TokenIssueTime deny on {issuer_kind} '{issuer_name}'"
+                ))
+            result["success"] = True
+            return result
 
         if self_revoke and not force:
             output.error("Refusing to self-revoke without --force.")
             output.info("Re-run with --force if you really want to deny your own current session.")
-            return False
+            result["error"] = "self-revoke blocked without --force"
+            return result
 
         if not force and not click.confirm(
             click.style(
@@ -532,7 +621,8 @@ class PhantomUserScanner:
             default=False,
         ):
             output.info("Revocation cancelled.")
-            return False
+            result["cancelled"] = True
+            return result
 
         cutoff = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
         policy_name = f"BKS-EmergencyTokenRevocation-{int(datetime.now(timezone.utc).timestamp())}"
@@ -561,12 +651,21 @@ class PhantomUserScanner:
                     PolicyDocument=json.dumps(policy_document),
                 )
             output.success(f"Applied TokenIssueTime deny on {issuer_kind} '{issuer_name}': {policy_name}")
-            click.echo(f"\n{click.style('✓ Short-term token revocation complete', fg='green', bold=True)}")
-            click.echo(output.cyan(f"All sessions issued by {issuer_arn} before {cutoff} are now denied.\n"))
-            return True
+            result["actions"].append({
+                "action": "token_issue_time_deny",
+                "policy_name": policy_name,
+                "cutoff": cutoff,
+                "success": True,
+            })
+            if not output._quiet_mode:
+                click.echo(f"\n{click.style('✓ Short-term token revocation complete', fg='green', bold=True)}")
+                click.echo(output.cyan(f"All sessions issued by {issuer_arn} before {cutoff} are now denied.\n"))
+            result["success"] = True
+            return result
         except ClientError as e:
             output.error(f"Failed to apply deny policy: {e}")
-            return False
+            result["error"] = str(e)
+            return result
 
     def discover_trail_coverage(self) -> Dict[str, str]:
         """Map enabled AWS regions to the CloudTrail trail covering them.
@@ -623,7 +722,7 @@ class PhantomUserScanner:
             output.warning(f"[{region}] CloudTrail lookup failed: {e}")
         return events
 
-    def generate_timeline(self, username: str, days: int = 7, all_regions: bool = False, max_events: int = 1000) -> None:
+    def generate_timeline(self, username: str, days: int = 7, all_regions: bool = False, max_events: int = 1000) -> Dict:
         """Generate CloudTrail timeline for phantom user activity.
 
         With all_regions=False (default), queries only the configured region.
@@ -631,28 +730,54 @@ class PhantomUserScanner:
         region with an active trail, then merges results by EventTime. Useful
         for LLMjacking detection since Bedrock data-plane events are recorded
         in the region where InvokeModel was called.
+
+        Returns a structured Dict:
+            {
+                "username": str, "days": int, "all_regions": bool,
+                "regions_searched": [str], "trail_coverage": {str: str},
+                "events": [{...}], "total_events": int,
+                "regions_with_activity": [str],
+            }
         """
-        click.echo(f"\n{output.bold('CloudTrail Timeline Analysis')}")
-        click.echo(output.cyan(f"Username:   {username}"))
-        click.echo(output.cyan(f"Time range: Last {days} days"))
+        result: Dict = {
+            "username": username,
+            "days": days,
+            "all_regions": all_regions,
+            "regions_searched": [],
+            "trail_coverage": {},
+            "events": [],
+            "total_events": 0,
+            "regions_with_activity": [],
+        }
+
+        if not output._quiet_mode:
+            click.echo(f"\n{output.bold('CloudTrail Timeline Analysis')}")
+            click.echo(output.cyan(f"Username:   {username}"))
+            click.echo(output.cyan(f"Time range: Last {days} days"))
 
         start_time = datetime.now(timezone.utc) - timedelta(days=days)
 
         if all_regions:
             output.info("Discovering CloudTrail coverage...")
             coverage = self.discover_trail_coverage()
+            result["trail_coverage"] = coverage
             if not coverage:
                 output.warning("No CloudTrail trails found. Falling back to current region's 90-day event history.")
                 regions = [self.region]
             else:
                 regions = sorted(coverage.keys())
                 trail_names = sorted(set(coverage.values()))
-                click.echo(output.cyan(f"Regions:    {len(regions)} covered by trail(s) {', '.join(trail_names)}"))
+                if not output._quiet_mode:
+                    click.echo(output.cyan(f"Regions:    {len(regions)} covered by trail(s) {', '.join(trail_names)}"))
         else:
             regions = [self.region]
-            click.echo(output.cyan(f"Regions:    {self.region} (use --all-regions to fan out)"))
-        click.echo()
+            if not output._quiet_mode:
+                click.echo(output.cyan(f"Regions:    {self.region} (use --all-regions to fan out)"))
 
+        result["regions_searched"] = regions
+
+        if not output._quiet_mode:
+            click.echo()
         output.info(f"Querying CloudTrail across {len(regions)} region(s) (this may take a moment)...\n")
 
         all_events: List[Dict] = []
@@ -668,120 +793,199 @@ class PhantomUserScanner:
                     all_events.extend(fut.result())
 
         if not all_events:
-            click.echo(output.yellow(f"No CloudTrail events found for {username}") + "\n")
-            return
+            if not output._quiet_mode:
+                click.echo(output.yellow(f"No CloudTrail events found for {username}") + "\n")
+            return result
 
         all_events.sort(key=lambda e: e['EventTime'])
+        result["total_events"] = len(all_events)
 
-        event_word = "event" if len(all_events) == 1 else "events"
-        click.echo(f"{output.bold(f'Found {len(all_events)} {event_word}:')}\n")
+        if not output._quiet_mode:
+            event_word = "event" if len(all_events) == 1 else "events"
+            n_events = len(all_events)
+            click.echo(f"{output.bold(f'Found {n_events} {event_word}:')}\n")
 
         for event in all_events:
             event_data = json.loads(event['CloudTrailEvent'])
-            event_time = event['EventTime'].strftime('%Y-%m-%d %H:%M:%S UTC')
+            event_time = event['EventTime']
             event_name = event['EventName']
             event_source = event_data.get('eventSource', 'unknown')
             source_ip = event_data.get('sourceIPAddress', 'unknown')
             error_code = event_data.get('errorCode', '')
             region = event.get('_Region', self.region)
+            user_agent = event_data.get('userAgent')
 
-            line = f"{event_time} | {region:14} | {event_name:36} | {event_source:30} | IP: {source_ip}"
-            if error_code:
-                click.echo(output.red(line))
-                click.echo(output.red(f"    └─ Error: {error_code}"))
-            elif 'Delete' in event_name or 'Create' in event_name:
-                click.echo(output.yellow(line))
-            else:
-                click.echo(output.cyan(line))
+            result["events"].append({
+                "event_time": event_time.isoformat(),
+                "event_name": event_name,
+                "event_source": event_source,
+                "source_ip": source_ip,
+                "error_code": error_code or None,
+                "region": region,
+                "user_agent": user_agent,
+            })
 
-        # Per-region tally for fan-out detection.
+            if not output._quiet_mode:
+                event_time_str = event_time.strftime('%Y-%m-%d %H:%M:%S UTC')
+                line = f"{event_time_str} | {region:14} | {event_name:36} | {event_source:30} | IP: {source_ip}"
+                if error_code:
+                    click.echo(output.red(line))
+                    click.echo(output.red(f"    └─ Error: {error_code}"))
+                elif 'Delete' in event_name or 'Create' in event_name:
+                    click.echo(output.yellow(line))
+                else:
+                    click.echo(output.cyan(line))
+
         from collections import Counter
         region_tally = Counter(e.get('_Region', self.region) for e in all_events)
-        if len(region_tally) > 1:
+        result["regions_with_activity"] = sorted(region_tally.keys())
+
+        if not output._quiet_mode and len(region_tally) > 1:
             click.echo(f"\n{output.bold('Region breakdown:')} {output.red('⚠ multi-region activity')}")
             for region, count in region_tally.most_common():
                 click.echo(f"  {region:14} {count} events")
 
         output.success("Timeline generation complete")
         output.info("Review events above for suspicious activity\n")
+        return result
+
+    def collect_incident_data(self, username: str) -> Dict:
+        """Side-effect-free fetch of all incident-report data for a phantom user.
+
+        Returns a structured Dict suitable for JSON serialization or text formatting.
+        Errors during IAM lookups are appended to result['errors'] rather than raised.
+        """
+        data: Dict = {
+            "username": username,
+            "account_id": self.account_id,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "user": None,
+            "bedrock_credentials": [],
+            "iam_access_keys": [],
+            "attached_policies": [],
+            "inline_policies": [],
+            "errors": [],
+        }
+        try:
+            user = self.iam.get_user(UserName=username)['User']
+            data["user"] = {
+                "user_id": user['UserId'],
+                "arn": user['Arn'],
+                "created": user['CreateDate'].isoformat(),
+            }
+
+            creds = self.iam.list_service_specific_credentials(
+                UserName=username,
+                ServiceName='bedrock.amazonaws.com',
+            )['ServiceSpecificCredentials']
+            data["bedrock_credentials"] = [
+                {
+                    "credential_id": c['ServiceSpecificCredentialId'],
+                    "status": c['Status'],
+                    "created": c['CreateDate'].isoformat(),
+                }
+                for c in creds
+            ]
+
+            access_keys = self.iam.list_access_keys(UserName=username)['AccessKeyMetadata']
+            data["iam_access_keys"] = [
+                {
+                    "access_key_id": k['AccessKeyId'],
+                    "status": k['Status'],
+                    "created": k['CreateDate'].isoformat(),
+                }
+                for k in access_keys
+            ]
+
+            attached = self.iam.list_attached_user_policies(UserName=username)['AttachedPolicies']
+            inline = self.iam.list_user_policies(UserName=username)['PolicyNames']
+            data["attached_policies"] = [
+                {"policy_name": p['PolicyName'], "policy_arn": p['PolicyArn']}
+                for p in attached
+            ]
+            data["inline_policies"] = list(inline)
+        except ClientError as e:
+            data["errors"].append(str(e))
+        return data
 
     def generate_incident_report(self, username: str, output_file: Optional[str] = None) -> str:
-        """Generate comprehensive incident report for phantom user"""
-        report_lines = []
+        """Generate human-readable incident report (text format) for phantom user.
+
+        Backed by collect_incident_data; the JSON variant is exposed via
+        the report --json flag in commands/report.py.
+        """
+        data = self.collect_incident_data(username)
+        report_lines: List[str] = []
 
         report_lines.append("═" * 80)
         report_lines.append("  AWS BEDROCK API KEY INCIDENT REPORT")
         report_lines.append("═" * 80)
         report_lines.append("")
-        report_lines.append(f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        ts = datetime.fromisoformat(data["generated_at"]).strftime('%Y-%m-%d %H:%M:%S UTC')
+        report_lines.append(f"Generated: {ts}")
         report_lines.append(f"Username: {username}")
         report_lines.append(f"Account ID: {self.account_id}")
         report_lines.append("")
 
-        try:
-            report_lines.append("PHANTOM USER DETAILS")
-            report_lines.append("─" * 80)
-            user = self.iam.get_user(UserName=username)['User']
-            report_lines.append(f"User ID: {user['UserId']}")
-            report_lines.append(f"ARN: {user['Arn']}")
-            report_lines.append(f"Created: {user['CreateDate'].strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        report_lines.append("PHANTOM USER DETAILS")
+        report_lines.append("─" * 80)
+        if data["user"]:
+            user = data["user"]
+            user_created = datetime.fromisoformat(user["created"]).strftime('%Y-%m-%d %H:%M:%S UTC')
+            report_lines.append(f"User ID: {user['user_id']}")
+            report_lines.append(f"ARN: {user['arn']}")
+            report_lines.append(f"Created: {user_created}")
             report_lines.append("")
 
-            report_lines.append("BEDROCK API CREDENTIALS")
-            report_lines.append("─" * 80)
-            creds = self.iam.list_service_specific_credentials(
-                UserName=username,
-                ServiceName='bedrock.amazonaws.com'
-            )['ServiceSpecificCredentials']
-
-            if creds:
-                for cred in creds:
-                    report_lines.append(f"  ID: {cred['ServiceSpecificCredentialId']}")
-                    report_lines.append(f"  Status: {cred['Status']}")
-                    report_lines.append(f"  Created: {cred['CreateDate'].strftime('%Y-%m-%d %H:%M:%S UTC')}")
-                    report_lines.append("")
-            else:
-                report_lines.append("  No credentials found")
+        report_lines.append("BEDROCK API CREDENTIALS")
+        report_lines.append("─" * 80)
+        if data["bedrock_credentials"]:
+            for cred in data["bedrock_credentials"]:
+                cred_created = datetime.fromisoformat(cred["created"]).strftime('%Y-%m-%d %H:%M:%S UTC')
+                report_lines.append(f"  ID: {cred['credential_id']}")
+                report_lines.append(f"  Status: {cred['status']}")
+                report_lines.append(f"  Created: {cred_created}")
                 report_lines.append("")
-
-            report_lines.append("IAM ACCESS KEYS (ESCALATION CHECK)")
-            report_lines.append("─" * 80)
-            access_keys = self.iam.list_access_keys(UserName=username)['AccessKeyMetadata']
-
-            if access_keys:
-                report_lines.append(f"  ⚠️  WARNING: {len(access_keys)} IAM access {'key' if len(access_keys) == 1 else 'keys'} found!")
-                for key in access_keys:
-                    report_lines.append(f"    Key ID: {key['AccessKeyId']}")
-                    report_lines.append(f"    Status: {key['Status']}")
-                    report_lines.append(f"    Created: {key['CreateDate'].strftime('%Y-%m-%d %H:%M:%S UTC')}")
-                report_lines.append("")
-            else:
-                report_lines.append("  No access keys found")
-                report_lines.append("")
-
-            report_lines.append("ATTACHED POLICIES")
-            report_lines.append("─" * 80)
-            attached = self.iam.list_attached_user_policies(UserName=username)['AttachedPolicies']
-            inline = self.iam.list_user_policies(UserName=username)['PolicyNames']
-
-            if attached:
-                report_lines.append("  Managed Policies:")
-                for policy in attached:
-                    report_lines.append(f"    - {policy['PolicyName']} ({policy['PolicyArn']})")
-            if inline:
-                report_lines.append("  Inline Policies:")
-                for policy_name in inline:
-                    report_lines.append(f"    - {policy_name}")
-            if not attached and not inline:
-                report_lines.append("  No policies attached")
+        else:
+            report_lines.append("  No credentials found")
             report_lines.append("")
 
-        except ClientError as e:
-            report_lines.append(f"ERROR: {e}")
+        report_lines.append("IAM ACCESS KEYS (ESCALATION CHECK)")
+        report_lines.append("─" * 80)
+        access_keys = data["iam_access_keys"]
+        if access_keys:
+            n_keys = len(access_keys)
+            key_word = "key" if n_keys == 1 else "keys"
+            report_lines.append(f"  ⚠️  WARNING: {n_keys} IAM access {key_word} found!")
+            for key in access_keys:
+                key_created = datetime.fromisoformat(key["created"]).strftime('%Y-%m-%d %H:%M:%S UTC')
+                report_lines.append(f"    Key ID: {key['access_key_id']}")
+                report_lines.append(f"    Status: {key['status']}")
+                report_lines.append(f"    Created: {key_created}")
+            report_lines.append("")
+        else:
+            report_lines.append("  No access keys found")
+            report_lines.append("")
+
+        report_lines.append("ATTACHED POLICIES")
+        report_lines.append("─" * 80)
+        if data["attached_policies"]:
+            report_lines.append("  Managed Policies:")
+            for policy in data["attached_policies"]:
+                report_lines.append(f"    - {policy['policy_name']} ({policy['policy_arn']})")
+        if data["inline_policies"]:
+            report_lines.append("  Inline Policies:")
+            for policy_name in data["inline_policies"]:
+                report_lines.append(f"    - {policy_name}")
+        if not data["attached_policies"] and not data["inline_policies"]:
+            report_lines.append("  No policies attached")
+        report_lines.append("")
+
+        for err in data["errors"]:
+            report_lines.append(f"ERROR: {err}")
             report_lines.append("")
 
         report_lines.append("═" * 80)
-
         report_content = '\n'.join(report_lines)
 
         if output_file:
@@ -791,7 +995,7 @@ class PhantomUserScanner:
                 output.success(f"Report saved to: {output_file}")
             except IOError as e:
                 output.error(f"Failed to save report: {e}")
-        else:
+        elif not output._quiet_mode:
             click.echo(report_content)
 
         return report_content

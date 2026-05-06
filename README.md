@@ -166,6 +166,7 @@ Remove orphaned phantom users that no longer have active credentials:
 bks cleanup --dry-run         # preview what would be deleted
 bks cleanup                   # delete with confirmation prompt
 bks cleanup --force           # skip confirmation (use with caution)
+bks cleanup --json            # save cleanup result as JSON to output/
 ```
 
 Only ORPHANED users are affected. ACTIVE and AT RISK users are never deleted automatically.
@@ -177,11 +178,14 @@ When a key is compromised, `bks` provides emergency response capabilities:
 ```bash
 bks revoke-key BedrockAPIKey-xxxx                 # emergency key revocation
 bks revoke-key BedrockAPIKey-xxxx --force         # skip confirmation
+bks revoke-key BedrockAPIKey-xxxx --json          # save revocation result to output/
 bks timeline BedrockAPIKey-xxxx                   # CloudTrail timeline (last 7 days, configured region)
 bks timeline BedrockAPIKey-xxxx --days 30         # extended timeline
 bks timeline BedrockAPIKey-xxxx --all-regions     # fan out across every region with CloudTrail coverage
+bks timeline BedrockAPIKey-xxxx --json            # save events list as JSON to output/
 bks report BedrockAPIKey-xxxx                     # full incident report
-bks report BedrockAPIKey-xxxx --output report.txt
+bks report BedrockAPIKey-xxxx --output report.txt # save text report to FILE
+bks report BedrockAPIKey-xxxx --json              # save report data as JSON to output/
 ```
 
 `revoke-key` applies an inline `Deny: bedrock:*` policy, deletes all Bedrock service-specific credentials and disables IAM access keys (`AKIA*`) on the phantom user, closing the privilege-escalation pivot in the same operation.
