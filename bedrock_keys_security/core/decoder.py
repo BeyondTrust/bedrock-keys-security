@@ -206,9 +206,7 @@ class BedrockKeyDecoder:
             }
 
 
-# Fields the decoder may emit that should not appear in CLI / report output.
-# Centralised here so adding a new sensitive field cannot leak silently
-# through every consumer that builds its own redaction list.
+# Centralised so a new sensitive field can't leak through one of many consumers.
 _FIELDS_TO_REMOVE = ('full_decoded', 'presigned_url')
 _FIELDS_TO_REDACT = ('secret_preview', 'credential_hint')
 

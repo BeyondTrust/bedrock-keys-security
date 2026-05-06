@@ -363,7 +363,6 @@ class PhantomUserScanner:
                 click.echo(f"  {output.red(f'Failed: {n_failed}')}")
             click.echo()
 
-        # Legacy keys for callers that read result['failed'] / result['deleted'] / result['total']
         result['total'] = len(orphaned_users)
         result['deleted'] = len(result['deleted_users'])
         result['failed'] = len(result['failed_users'])

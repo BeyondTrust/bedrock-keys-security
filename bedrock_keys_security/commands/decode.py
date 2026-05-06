@@ -21,9 +21,6 @@ def decode_key(ctx, key, output_json):
     result = redact_for_display(raw)
 
     if output_json:
-        # build_output_path validates account_id against ^\d{12}$ to neutralize
-        # path-traversal in crafted ABSK keys (e.g. account_id='../../etc').
-        # The raw value remains in the JSON content for forensic visibility.
         account_id = raw.get('account_id') or 'unknown'
         path = build_output_path("decode", account_id, "json", output_dir=ctx.obj.output_dir)
         write_secure(path, json.dumps(result, indent=2))

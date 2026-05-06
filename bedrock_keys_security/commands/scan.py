@@ -17,16 +17,10 @@ _ACCOUNT_ID_RE = re.compile(r"^\d{12}$")
 
 
 def build_output_path(command: str, account_id: str, ext: str, output_dir: Path = OUTPUT_DIR) -> Path:
-    """Return output/bks-<command>-<sanitized-account>-<UTC ts µs>.<ext>; create dir if missing.
+    """Return output/bks-<command>-<account>-<UTC ts µs>.<ext>; create dir if missing.
 
-    `account_id` is validated against `^\\d{12}$` (AWS account ID shape). Values
-    that don't match (e.g. a crafted ABSK key with a path-traversal payload in
-    the embedded account field) fall back to `unknown` in the filename. The
-    forensic JSON content still records the raw value, but the filesystem
-    surface is bounded.
-
-    Microsecond resolution prevents filename collisions when concurrent runs
-    fire in the same second.
+    Non-12-digit `account_id` (e.g. path-traversal payload from a crafted ABSK
+    key) collapses to `unknown` so the filename can't escape `output_dir`.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     safe_account = account_id if _ACCOUNT_ID_RE.match(str(account_id)) else "unknown"

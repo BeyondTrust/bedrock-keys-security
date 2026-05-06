@@ -69,12 +69,10 @@ def cli(ctx, profile, region, verbose, quiet, output_dir):
     if quiet:
         output.set_quiet(True)
 
-    # Default to 'scan' when no subcommand given
     if ctx.invoked_subcommand is None:
         ctx.invoke(scan)
 
 
-# Import and register commands
 from bedrock_keys_security.commands.scan import scan  # noqa: E402
 from bedrock_keys_security.commands.cleanup import cleanup  # noqa: E402
 from bedrock_keys_security.commands.revoke import revoke_key  # noqa: E402
