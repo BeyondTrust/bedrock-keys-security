@@ -215,8 +215,8 @@ class TestCleanupPluralization:
 
 
 class TestBuildOutputPath:
-    def test_filename_shape(self, tmp_path):
-        path = build_output_path("123456789012", "json", output_dir=tmp_path)
+    def test_scan_filename_shape(self, tmp_path):
+        path = build_output_path("scan", "123456789012", "json", output_dir=tmp_path)
         assert path.parent == tmp_path
         assert path.name.startswith("bks-scan-123456789012-")
         assert path.name.endswith(".json")
@@ -224,9 +224,14 @@ class TestBuildOutputPath:
         assert len(ts) == len("YYYYMMDDTHHMMSSZ")
         assert ts.endswith("Z")
 
+    def test_decode_filename_shape(self, tmp_path):
+        path = build_output_path("decode", "123456789012", "json", output_dir=tmp_path)
+        assert path.name.startswith("bks-decode-123456789012-")
+        assert path.name.endswith(".json")
+
     def test_creates_directory_when_missing(self, tmp_path):
         target = tmp_path / "nested" / "outputs"
         assert not target.exists()
-        path = build_output_path("123456789012", "csv", output_dir=target)
+        path = build_output_path("scan", "123456789012", "csv", output_dir=target)
         assert target.is_dir()
         assert path.parent == target

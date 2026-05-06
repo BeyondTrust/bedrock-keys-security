@@ -87,9 +87,11 @@ Run a scan to discover all phantom IAM users in your account:
 ```bash
 bks scan                      # scan with default profile
 bks scan --profile prod       # use a specific AWS profile
+bks scan --region eu-west-1   # override the default us-east-1 region
 bks scan --json               # save JSON to output/
 bks scan --csv                # save CSV to output/
 bks scan --verbose            # detailed output
+bks --quiet scan --json       # SOAR pipelines: only the saved-file path goes to stdout
 ```
 
 Example output:
@@ -111,6 +113,23 @@ Summary:
   At Risk: 1 (IAM access keys found)
   Active: 1 (live Bedrock API keys)
   Orphaned: 1 (safe to cleanup)
+
+⚠ AT RISK · 1 phantom user with persistent IAM credentials
+   - BedrockAPIKey-h42z  (2 access keys)
+
+   These keys inherit Bedrock admin + IAM/VPC/KMS reconnaissance from
+   AmazonBedrockLimitedAccess, and persist after Bedrock key revocation.
+
+   → bks revoke-key <username>   emergency containment
+   → bks report     <username>   forensic report
+
+▸ ORPHANED · 1 phantom user with no active credentials
+   These accumulate over time as privilege-escalation pivots. Cleanup
+   shrinks the attack surface; no live workflow is affected.
+
+   → bks cleanup --dry-run   preview deletions
+   → bks cleanup             delete with confirmation
+
 
 Scan complete  127 IAM users  ·  3 phantoms  ·  1.4s
 ```
@@ -176,11 +195,11 @@ bks report BedrockAPIKey-xxxx --output report.txt
 Decode leaked Bedrock API keys offline, no AWS credentials required:
 
 ```bash
-bks decode-key "ABSKQmVkcm9ja0FQSUtleS..."
-bks decode-key "bedrock-api-key-YmVkcm9ja..." --json
+bks decode-key "ABSKQmVkcm9ja0FQSUtleS..."          # print analysis to terminal
+bks decode-key "bedrock-api-key-YmVkcm9ja..." --json # save JSON to output/
 ```
 
-Extracts the embedded IAM username, AWS account ID, region and key format. Useful for triaging keys found on GitHub, Pastebin or other public sources.
+Extracts the embedded IAM username, AWS account ID, region and key format. Useful for triaging keys found on GitHub, Pastebin or other public sources. With `--json`, writes `output/bks-decode-<account>-<UTC-timestamp>.json`.
 
 <img src="https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/long-term-key.png" alt="Long-term Key Decode" width="480">
 
@@ -244,7 +263,9 @@ export AWS_ACCESS_KEY_ID=ASIA...
 export AWS_SECRET_ACCESS_KEY=...
 export AWS_SESSION_TOKEN=...
 
-aws bedrock-runtime invoke-model --model-id us.anthropic.claude-opus-4-7 ...
+aws bedrock-runtime converse \
+  --model-id us.anthropic.claude-opus-4-7 \
+  --messages '[{"role":"user","content":[{"text":"hello"}]}]'
 ```
 
 API keys may still be necessary for legacy applications hardcoded for bearer tokens, third-party tools without SigV4 support or vendor software lacking STS integration. In those cases, use short-term keys with a maximum 12-hour lifetime and enforce restrictions with the SCPs above.
