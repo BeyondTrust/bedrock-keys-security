@@ -26,8 +26,11 @@ output/
 *.csv
 *.log
 
-# Terraform (provider binaries; .terraform.lock.hcl IS committed)
+# Terraform: ignore everything generated locally. Lock file omitted because
+# scps/terraform is consumed as a module (source = "./scps/terraform"), where
+# the consumer's lock file does the pinning.
 .terraform/
+.terraform.lock.hcl
 *.tfstate
 *.tfstate.backup
 *.tfplan
