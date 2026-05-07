@@ -2,7 +2,7 @@
 name: "✨ Feature Request"
 about: "Suggest an enhancement or new capability for BKS"
 title: "[FEATURE] "
-labels: ["enhancement"]
+labels: ["type: enhancement"]
 ---
 
 ## Summary
