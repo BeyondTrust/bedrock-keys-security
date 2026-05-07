@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "🔒 Security vulnerability"
+    url: https://www.beyondtrust.com/disclosure
+    about: "Report through BeyondTrust's coordinated disclosure program. Do not open a public issue for security findings."
+  - name: "💬 Usage question or support"
+    url: mailto:support@beyondtrust.com
+    about: "Email BeyondTrust support for usage questions (see SUPPORT.md)."
+  - name: "📖 Contributing a fix or feature"
+    url: https://github.com/BeyondTrust/bedrock-keys-security/blob/main/CONTRIBUTING.md
+    about: "Read CONTRIBUTING.md before opening a pull request."
