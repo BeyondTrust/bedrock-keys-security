@@ -73,5 +73,9 @@ Only if the bug stems from an unexpected AWS response:
 
 ## Workaround (optional)
 
+\```
+(describe any temporary fix or workaround, even partial)
+
+\```
 ## Additional Context
 Recent AWS changes, IAM policy changes, network restrictions, anything relevant.
