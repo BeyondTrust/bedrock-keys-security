@@ -2,7 +2,7 @@
 name: "🐛 Bug Report"
 about: "Report a reproducible defect in BKS"
 title: "[BUG] "
-labels: ["bug", "triage-needed"]
+labels: ["type: bug", "triage-needed"]
 ---
 
 ## Summary
