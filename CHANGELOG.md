@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- `bks scan --org`: organization-wide scan that calls `organizations:ListAccounts` from the management / delegated-admin account, AssumeRoles into every ACTIVE member account in parallel and aggregates results. Flags: `--org-role NAME` (default `OrganizationAccountAccessRole`), `--org-accounts IDS`, `--org-skip IDS`. Per-account failures are captured in the result (`status=error`) and never abort the whole run. Output is `output/bks-scan-org-<mgmt-account>-<UTC>.{json,csv}`; CSV is flattened to one row per phantom user, prefixed with `account_id` / `account_name` columns.
+- `AWSSession.from_credentials(...)` factory for building a session from already-resolved temporary credentials (used by org scan after `sts:AssumeRole`).
+
 ## [1.1.0] - 2026-05-06
 
 ### Breaking

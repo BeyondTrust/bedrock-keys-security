@@ -35,3 +35,37 @@ class AWSSession:
         except ClientError as e:
             output.error(f"Failed to initialize AWS session: {e}")
             sys.exit(1)
+
+    @classmethod
+    def from_credentials(
+        cls,
+        access_key: str,
+        secret_key: str,
+        session_token: str,
+        region: str,
+        account_id: str,
+        caller_arn: str,
+        verbose: bool = False,
+    ) -> "AWSSession":
+        """Build an AWSSession from already-resolved temporary credentials.
+
+        Used by org-wide scan after sts:AssumeRole into a member account.
+        Skips profile lookup and the redundant GetCallerIdentity call (the
+        AssumeRole response already carries the assumed-role ARN).
+        """
+        inst = cls.__new__(cls)
+        inst.region = region or "us-east-1"
+        inst.session = boto3.Session(
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            aws_session_token=session_token,
+            region_name=inst.region,
+        )
+        inst.iam = inst.session.client("iam")
+        inst.sts = inst.session.client("sts")
+        inst.cloudtrail = inst.session.client("cloudtrail", region_name=inst.region)
+        inst.account_id = account_id
+        inst.caller_arn = caller_arn
+        if verbose:
+            output.info(f"Assumed role into account: {account_id}")
+        return inst
