@@ -52,7 +52,7 @@ These phantom users are never automatically cleaned up. They accumulate over tim
 
 **Privilege Escalation:** If an attacker creates an IAM access key on the phantom user, or if one already exists, they gain persistent IAM credentials (`AKIA...`) that extend well beyond Bedrock. From there, they can pivot to S3, Secrets Manager and other services, even after the original Bedrock key expires.
 
-> **Deep-dive:** [AWS Bedrock API Keys Security Guide, Part 1: Risks, Vulnerabilities and Attack Techniques](https://www.beyondtrust.com/blog/entry/aws-bedrock-security-api-keys) on the BeyondTrust Phantom Labs blog.
+> **Deep-dive:** [AWS Bedrock API Keys Security Guide, Part 1: Risks, Vulnerabilities and Attack Techniques](https://www.beyondtrust.com/blog/entry/aws-bedrock-security-api-keys) and [Part 2: Detection, Prevention and Response](https://www.beyondtrust.com/blog/entry/aws-bedrock-security-guide-api-keys-detection-response) on the BeyondTrust Phantom Labs blog.
 
 ## Installation
 
@@ -248,6 +248,8 @@ Both default to enabling `Block-Bedrock-API-Keys` plus `Block-Phantom-User-Escal
 
 SIEM-ready detection rules for the full attack chain are in [`detections/`](detections/): 6 Sigma rules, 2 CloudTrail Lake queries, 2 Athena queries, 5 EventBridge patterns and 1 CloudWatch Insights query. Coverage spans bearer-token usage, key creation, phantom-user creation, AKIA escalation, cross-region fan-out and suspicious user-agents.
 
+> **Deep-dive:** Detection strategies, deployment guidance for CloudWatch, EventBridge and SIEM platforms in [AWS Bedrock API Keys Security Guide, Part 2: Detection, Prevention and Response](https://www.beyondtrust.com/blog/entry/aws-bedrock-security-guide-api-keys-detection-response).
+
 ## Migration to STS
 
 Most teams do not need Bedrock API keys. AWS STS temporary credentials are the recommended approach:
@@ -296,6 +298,7 @@ Apache 2.0. See [LICENSE](LICENSE).
 ## References
 
 - [AWS Bedrock API Keys Security Guide, Part 1: Risks, Vulnerabilities and Attack Techniques](https://www.beyondtrust.com/blog/entry/aws-bedrock-security-api-keys) (BeyondTrust Phantom Labs)
+- [AWS Bedrock API Keys Security Guide, Part 2: Detection, Prevention and Response](https://www.beyondtrust.com/blog/entry/aws-bedrock-security-guide-api-keys-detection-response) (BeyondTrust Phantom Labs)
 - [AWS Bedrock API Keys User Guide](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html)
 - [AWS Security Blog: Securing Bedrock API Keys](https://aws.amazon.com/blogs/security/securing-amazon-bedrock-api-keys-best-practices-for-implementation-and-management/)
 - [AWS SCP Examples for Bedrock](https://github.com/aws-samples/service-control-policy-examples/tree/main/Service-specific-controls/Amazon-Bedrock)
