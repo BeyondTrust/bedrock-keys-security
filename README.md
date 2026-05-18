@@ -23,6 +23,9 @@ bks scan --profile your-aws-profile
 # Decode a leaked key offline (no AWS credentials needed)
 bks decode-key "ABSKQmVkcm9ja..."
 
+# Scan every active member account in the organization
+bks scan --org --profile mgmt-account
+
 # Investigate a phantom user across every region with CloudTrail coverage
 bks timeline BedrockAPIKey-xxxx --all-regions --days 30
 
@@ -131,9 +134,7 @@ The aggregate JSON shape (`output/bks-scan-org-<mgmt-account>-<UTC>.json`):
 }
 ```
 
-CSV output (`--csv`) flattens to one row per phantom user, prefixed with
-`account_id` / `account_name` columns. Required permissions for org mode
-are listed in [docs/permissions.md](docs/permissions.md).
+`--csv` flattens this to one row per phantom user with `account_id` / `account_name` columns prepended.
 
 Example output:
 
