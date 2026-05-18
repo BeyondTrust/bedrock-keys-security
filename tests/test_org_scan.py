@@ -19,7 +19,9 @@ from bedrock_keys_security.core.org import (
     OrgScanError,
     OrgScanner,
     format_org_table_report,
+    org_csv_report,
     org_csv_rows,
+    org_json_report,
 )
 from bedrock_keys_security.utils import output
 
@@ -358,6 +360,41 @@ class TestFormatters:
         assert rows[0]["account_id"] == "111111111111"
         assert rows[0]["account_name"] == "mgmt"
         assert rows[0]["username"] == "BedrockAPIKey-x"
+
+    def test_json_report_serializes_datetimes(self):
+        result = {
+            "scan_metadata": {
+                "mode": "org",
+                "scan_time": datetime(2026, 5, 10, tzinfo=timezone.utc),
+                "accounts_total": 1, "accounts_scanned": 1, "accounts_failed": 0,
+            },
+            "summary": {"total": 1, "active": 0, "orphaned": 1, "at_risk": 0},
+            "accounts": [],
+        }
+        payload = json.loads(org_json_report(result))
+        assert payload["scan_metadata"]["mode"] == "org"
+        assert payload["scan_metadata"]["scan_time"] == "2026-05-10T00:00:00+00:00"
+
+    def test_csv_report_writes_flattened_rows_with_account_columns(self, tmp_path):
+        result = {
+            "accounts": [
+                {"account_id": "111111111111", "account_name": "mgmt",
+                 "status": "ok", "phantom_users": [
+                    {"username": "BedrockAPIKey-x", "user_id": "AID1", "status": "ORPHANED",
+                     "created": datetime(2026, 1, 1, tzinfo=timezone.utc),
+                     "active_bedrock_credentials": 0, "active_access_keys": 0,
+                     "bedrock_credentials": 0, "access_keys": 0,
+                     "access_key_ids": [], "attached_policies": ["AmazonBedrockLimitedAccess"],
+                     "inline_policies": []},
+                 ], "summary": {"total": 1, "active": 0, "orphaned": 1, "at_risk": 0}},
+            ]
+        }
+        output_path = tmp_path / "org.csv"
+        org_csv_report(result, str(output_path))
+        content = output_path.read_text()
+        assert content.startswith("account_id,account_name,username,")
+        assert "111111111111,mgmt,BedrockAPIKey-x" in content
+        assert "AmazonBedrockLimitedAccess" in content
 
 
 class TestCliWiring:

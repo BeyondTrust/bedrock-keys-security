@@ -1,7 +1,5 @@
 """Scan command - discover phantom IAM users"""
 
-import csv
-import json
 import os
 import re
 import sys
@@ -18,9 +16,9 @@ from bedrock_keys_security.core.org import (
     OrgScanError,
     OrgScanner,
     format_org_table_report,
-    org_csv_rows,
+    org_csv_report,
+    org_json_report,
 )
-from bedrock_keys_security.core.scanner import _csv_safe, _json_default
 from bedrock_keys_security.utils import output
 from bedrock_keys_security.utils.cli import aws_options, apply_aws_overrides, apply_quiet_override, quiet_option
 
@@ -155,36 +153,6 @@ def scan(ctx, profile, region, output_json, output_csv, verbose,
         click.echo(f"{label} saved: {path}")
 
 
-_ORG_CSV_FIELDS = [
-    'account_id', 'account_name',
-    'username', 'user_id', 'created', 'status',
-    'active_bedrock_credentials', 'bedrock_credentials',
-    'active_access_keys', 'access_keys',
-    'access_key_ids', 'attached_policies', 'inline_policies',
-]
-
-
-def _write_org_csv(path: Path, result: dict) -> None:
-    """Flatten org result to one row per phantom user, account columns first."""
-    rows = org_csv_rows(result)
-    with open(path, 'w', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=_ORG_CSV_FIELDS, extrasaction='ignore')
-        writer.writeheader()
-        for row in rows:
-            row = dict(row)
-            created = row.get('created')
-            if isinstance(created, datetime):
-                row['created'] = created.isoformat()
-            row['access_key_ids'] = ','.join(row.get('access_key_ids') or [])
-            row['attached_policies'] = ','.join(row.get('attached_policies') or [])
-            row['inline_policies'] = ','.join(row.get('inline_policies') or [])
-            writer.writerow({k: _csv_safe(v) for k, v in row.items()})
-    try:
-        os.chmod(path, 0o600)
-    except OSError:
-        pass
-
-
 def _run_org_scan(ctx, org_role, accounts_filter, skip_accounts, output_json, output_csv):
     """Fan out the scan across the organization and render the aggregate."""
     quiet = ctx.obj.quiet
@@ -221,13 +189,17 @@ def _run_org_scan(ctx, org_role, accounts_filter, skip_accounts, output_json, ou
     if output_json:
         path = build_output_path("scan-org", base_session.account_id, "json",
                                  output_dir=ctx.obj.output_dir)
-        write_secure(path, json.dumps(result, indent=2, default=_json_default))
+        write_secure(path, org_json_report(result))
         saved.append(("JSON", path))
 
     if output_csv:
         path = build_output_path("scan-org", base_session.account_id, "csv",
                                  output_dir=ctx.obj.output_dir)
-        _write_org_csv(path, result)
+        org_csv_report(result, str(path))
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
         saved.append(("CSV", path))
 
     if not quiet:

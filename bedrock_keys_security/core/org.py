@@ -11,6 +11,8 @@ captured per-account and do not abort the scan; the failing account is
 marked status=error in the output.
 """
 
+import csv
+import json
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -20,7 +22,7 @@ import click
 from botocore.exceptions import BotoCoreError, ClientError
 from tabulate import tabulate
 
-from bedrock_keys_security.core.scanner import PhantomUserScanner
+from bedrock_keys_security.core.scanner import PhantomUserScanner, _csv_safe, _json_default
 from bedrock_keys_security.utils import output
 from bedrock_keys_security.utils.aws import AWSSession
 
@@ -324,3 +326,34 @@ def org_csv_rows(result: Dict) -> List[Dict]:
             row["account_name"] = acct.get("account_name", "")
             rows.append(row)
     return rows
+
+
+_ORG_CSV_FIELDS = [
+    'account_id', 'account_name',
+    'username', 'user_id', 'created', 'status',
+    'active_bedrock_credentials', 'bedrock_credentials',
+    'active_access_keys', 'access_keys',
+    'access_key_ids', 'attached_policies', 'inline_policies',
+]
+
+
+def org_json_report(result: Dict) -> str:
+    """Serialize the org scan result as an indented JSON string."""
+    return json.dumps(result, indent=2, default=_json_default)
+
+
+def org_csv_report(result: Dict, output_file: str) -> None:
+    """Flatten the org result to one row per phantom user and write CSV to output_file."""
+    rows = org_csv_rows(result)
+    with open(output_file, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=_ORG_CSV_FIELDS, extrasaction='ignore')
+        writer.writeheader()
+        for row in rows:
+            row = dict(row)
+            created = row.get('created')
+            if isinstance(created, datetime):
+                row['created'] = created.isoformat()
+            row['access_key_ids'] = ','.join(row.get('access_key_ids') or [])
+            row['attached_policies'] = ','.join(row.get('attached_policies') or [])
+            row['inline_policies'] = ','.join(row.get('inline_policies') or [])
+            writer.writerow({k: _csv_safe(v) for k, v in row.items()})
