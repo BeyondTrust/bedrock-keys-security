@@ -18,7 +18,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-import click
 from botocore.exceptions import BotoCoreError, ClientError
 from tabulate import tabulate
 
