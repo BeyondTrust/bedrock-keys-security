@@ -339,6 +339,25 @@ class TestScanAll:
         # No AssumeRole because only management account is in filter.
         assert base.sts.assume_role.call_count == 0
 
+    def test_filter_matching_nothing_returns_empty_result(self, patched_from_credentials):
+        """When --org-accounts filter matches zero accounts in the org, scan_all
+        short-circuits with an empty result. No AssumeRole should be attempted.
+        """
+        base = _BaseStubSession(account_id="111111111111")
+        base.organizations.get_paginator.return_value = _list_accounts_response([
+            {"id": "111111111111", "name": "mgmt"},
+        ])
+
+        scanner = OrgScanner(base_session=base)
+        result = scanner.scan_all(accounts_filter=["999999999999"])
+
+        assert result["scan_metadata"]["accounts_total"] == 0
+        assert result["scan_metadata"]["accounts_scanned"] == 0
+        assert result["scan_metadata"]["accounts_failed"] == 0
+        assert result["accounts"] == []
+        assert result["summary"] == {"total": 0, "active": 0, "orphaned": 0, "at_risk": 0}
+        assert base.sts.assume_role.call_count == 0
+
     def test_skip_accounts_excludes(self, patched_from_credentials):
         base = _BaseStubSession(account_id="111111111111")
         base.organizations.get_paginator.return_value = _list_accounts_response([
@@ -379,6 +398,36 @@ class TestFormatters:
         assert "Account: 222222222222 (denied)" in rendered
         assert "ERROR" in rendered
         assert "AccessDenied" in rendered
+
+    def test_table_includes_at_risk_remediation_callout(self):
+        """When the org has at-risk phantoms, the formatter prints the revoke-key
+        remediation block so SOC operators know what to do next.
+        """
+        result = {
+            "scan_metadata": {
+                "mode": "org", "management_account_id": "111111111111",
+                "scan_time": "2026-05-10T00:00:00+00:00",
+                "caller_arn": "arn:aws:iam::111111111111:user/admin",
+                "role_assumed": DEFAULT_ORG_ROLE,
+                "accounts_total": 1, "accounts_scanned": 1, "accounts_failed": 0,
+            },
+            "summary": {"total": 1, "active": 0, "orphaned": 0, "at_risk": 1},
+            "accounts": [
+                {"account_id": "222222222222", "account_name": "prod",
+                 "status": "ok",
+                 "phantom_users": [
+                    {"username": "BedrockAPIKey-x", "status": "AT RISK",
+                     "created": datetime(2026, 1, 1, tzinfo=timezone.utc),
+                     "active_bedrock_credentials": 0, "active_access_keys": 1,
+                     "bedrock_credentials": 0, "access_keys": 1,
+                     "access_key_ids": ["AKIAEXAMPLE"], "attached_policies": [], "inline_policies": []},
+                 ],
+                 "summary": {"total": 1, "active": 0, "orphaned": 0, "at_risk": 1}},
+            ],
+        }
+        rendered = format_org_table_report(result)
+        assert "AT RISK" in rendered
+        assert "revoke-key" in rendered
 
     def test_csv_rows_one_per_phantom_with_account_columns(self):
         result = {
