@@ -23,6 +23,9 @@ bks scan --profile your-aws-profile
 # Decode a leaked key offline (no AWS credentials needed)
 bks decode-key "ABSKQmVkcm9ja..."
 
+# Scan every active member account in the organization
+bks scan --org --profile mgmt-account
+
 # Investigate a phantom user across every region with CloudTrail coverage
 bks timeline BedrockAPIKey-xxxx --all-regions --days 30
 
@@ -92,7 +95,46 @@ bks scan --json               # save JSON to output/
 bks scan --csv                # save CSV to output/
 bks scan --verbose            # detailed output
 bks --quiet scan --json       # SOAR pipelines: only the saved-file path goes to stdout
+
+# Org-wide scan: AssumeRole into every active member account and aggregate
+bks scan --org                                              # uses OrganizationAccountAccessRole
+bks scan --org --org-role MyOrgScanRole                     # custom cross-account role
+bks scan --org --org-accounts 111111111111,222222222222     # scope to specific accounts
+bks scan --org --org-skip 333333333333 --json               # exclude an account, save JSON
 ```
+
+#### Org-wide scan
+
+Run from the management account or a delegated admin. `bks` calls
+`organizations:ListAccounts` and fans out across every ACTIVE member
+account in parallel via `sts:AssumeRole`. Per-account failures (role
+missing, AccessDenied) are captured per-account and never abort the
+run; failed accounts are surfaced in the final report.
+
+The aggregate JSON shape (`output/bks-scan-org-<mgmt-account>-<UTC>.json`):
+
+```json
+{
+  "scan_metadata": {
+    "mode": "org",
+    "management_account_id": "111111111111",
+    "role_assumed": "OrganizationAccountAccessRole",
+    "accounts_total": 12, "accounts_scanned": 11, "accounts_failed": 1,
+    "scan_time": "2026-05-10T14:30:22+00:00"
+  },
+  "summary": { "total": 17, "active": 4, "orphaned": 11, "at_risk": 2 },
+  "accounts": [
+    { "account_id": "222222222222", "account_name": "prod",
+      "status": "ok", "summary": {"total": 3, "active": 1, "orphaned": 2, "at_risk": 0},
+      "phantom_users": [ ... ] },
+    { "account_id": "333333333333", "account_name": "sandbox",
+      "status": "error", "error": "AssumeRole arn:...: AccessDenied",
+      "summary": {"total": 0, "active": 0, "orphaned": 0, "at_risk": 0} }
+  ]
+}
+```
+
+`--csv` flattens this to one row per phantom user with `account_id` / `account_name` columns prepended.
 
 Example output:
 

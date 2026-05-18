@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `bks scan --org`: organization-wide scan via `sts:AssumeRole` into every ACTIVE member account in the organization, parallelized and aggregated. Per-account failures (role missing, AccessDenied, throttled) captured as `status=error` in the output without aborting the run. Flags: `--org-role NAME` (default `OrganizationAccountAccessRole`), `--org-accounts IDS`, `--org-skip IDS`. CSV output flattens to one row per phantom user with `account_id` / `account_name` columns prepended.
+
 ## [1.1.0] - 2026-05-06
 
 ### Breaking

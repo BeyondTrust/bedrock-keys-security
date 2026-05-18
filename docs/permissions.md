@@ -5,6 +5,7 @@
 | Command | IAM Permissions Required |
 |---|---|
 | `scan` | `iam:ListUsers`, `iam:ListServiceSpecificCredentials`, `iam:ListAccessKeys`, `iam:ListAttachedUserPolicies`, `iam:ListUserPolicies` |
+| `scan --org` | **Caller (management / delegated admin)**: `organizations:ListAccounts` + `sts:AssumeRole` on `arn:aws:iam::*:role/<org-role>`. **Each member account**: the same permissions as `scan`, attached to the assumed role (default `OrganizationAccountAccessRole`). |
 | `cleanup` | All `scan` permissions + `iam:DeleteAccessKey`, `iam:DeleteServiceSpecificCredential`, `iam:DetachUserPolicy`, `iam:DeleteUserPolicy`, `iam:DeleteUser` |
 | `revoke-key` | `iam:PutUserPolicy`, `iam:ListServiceSpecificCredentials`, `iam:DeleteServiceSpecificCredential`, `iam:ListAccessKeys`, `iam:UpdateAccessKey` |
 | `timeline` | `cloudtrail:LookupEvents` (plus `cloudtrail:DescribeTrails` and `ec2:DescribeRegions` when using `--all-regions`) |
