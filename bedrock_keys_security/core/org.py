@@ -106,7 +106,7 @@ class OrgScanner:
         try:
             resp = self.sts.assume_role(
                 RoleArn=role_arn,
-                RoleSessionName=f"bks-org-scan-{int(time.time())}",
+                RoleSessionName=f"bks-org-scan-{account_id}-{int(time.time())}",
                 DurationSeconds=ORG_ASSUME_DURATION,
             )
         except ClientError as e:
