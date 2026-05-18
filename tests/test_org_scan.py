@@ -229,6 +229,55 @@ class TestScanAll:
         ok = next(a for a in result["accounts"] if a["account_id"] == "111111111111")
         assert ok["status"] == "ok"
 
+    def test_iam_failure_inside_member_account_does_not_abort(self, patched_from_credentials):
+        """A ClientError inside scanner.find_phantom_users (e.g. ListUsers throttled,
+        AccessDenied) for one member account must be captured as status=error in the
+        result, never abort the org-wide run via sys.exit / SystemExit.
+        """
+        base = _BaseStubSession(account_id="111111111111")
+        base.organizations.get_paginator.return_value = _list_accounts_response([
+            {"id": "111111111111", "name": "mgmt"},
+            {"id": "222222222222", "name": "throttled"},
+        ])
+        # Management account scans clean.
+        _empty_iam(base.iam)
+        base.iam.get_paginator.return_value = _list_users_paginator([])
+
+        # Member account: iam.list_users paginator raises ThrottlingException.
+        member = _BaseStubSession(account_id="222222222222")
+        _empty_iam(member.iam)
+        throttled_paginator = MagicMock()
+        throttled_paginator.paginate.side_effect = ClientError(
+            {"Error": {"Code": "ThrottlingException", "Message": "Rate exceeded"}},
+            "ListUsers",
+        )
+        member.iam.get_paginator.return_value = throttled_paginator
+        patched_from_credentials["222222222222"] = member
+
+        base.sts.assume_role.return_value = {
+            "Credentials": {
+                "AccessKeyId": "ASIA",
+                "SecretAccessKey": "x",
+                "SessionToken": "t",
+                "Expiration": datetime(2099, 1, 1, tzinfo=timezone.utc),
+            },
+            "AssumedRoleUser": {
+                "Arn": "arn:aws:sts::222222222222:assumed-role/OrganizationAccountAccessRole/bks",
+                "AssumedRoleId": "AROA:bks",
+            },
+        }
+
+        scanner = OrgScanner(base_session=base)
+        result = scanner.scan_all()
+
+        assert result["scan_metadata"]["accounts_scanned"] == 1
+        assert result["scan_metadata"]["accounts_failed"] == 1
+        throttled = next(a for a in result["accounts"] if a["account_id"] == "222222222222")
+        assert throttled["status"] == "error"
+        assert "ThrottlingException" in throttled["error"]
+        ok = next(a for a in result["accounts"] if a["account_id"] == "111111111111")
+        assert ok["status"] == "ok"
+
     def test_accounts_filter_scopes_run(self, patched_from_credentials):
         base = _BaseStubSession(account_id="111111111111")
         base.organizations.get_paginator.return_value = _list_accounts_response([

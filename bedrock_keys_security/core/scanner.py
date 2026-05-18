@@ -62,26 +62,22 @@ class PhantomUserScanner:
 
         bare_users: List[Dict] = []
         total_users_scanned = 0
-        try:
-            paginator = self.iam.get_paginator('list_users')
-            for page in paginator.paginate():
-                page_users = page['Users']
-                total_users_scanned += len(page_users)
-                for user in page_users:
-                    username = user['UserName']
-                    if username.startswith('BedrockAPIKey-'):
-                        if self.verbose:
-                            output.info(f"Found phantom user: {username}")
-                        bare_users.append({
-                            'username': username,
-                            'user_id': user['UserId'],
-                            'arn': user['Arn'],
-                            'created': user['CreateDate'],
-                            'path': user['Path'],
-                        })
-        except ClientError as e:
-            output.error(f"Failed to list IAM users: {e}")
-            sys.exit(1)
+        paginator = self.iam.get_paginator('list_users')
+        for page in paginator.paginate():
+            page_users = page['Users']
+            total_users_scanned += len(page_users)
+            for user in page_users:
+                username = user['UserName']
+                if username.startswith('BedrockAPIKey-'):
+                    if self.verbose:
+                        output.info(f"Found phantom user: {username}")
+                    bare_users.append({
+                        'username': username,
+                        'user_id': user['UserId'],
+                        'arn': user['Arn'],
+                        'created': user['CreateDate'],
+                        'path': user['Path'],
+                    })
         self.last_users_scanned = total_users_scanned
 
         def enrich(user_data: Dict) -> Dict:

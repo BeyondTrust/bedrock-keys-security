@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import click
+from botocore.exceptions import ClientError
 
 from bedrock_keys_security.core.org import (
     DEFAULT_ORG_ROLE,
@@ -114,8 +115,12 @@ def scan(ctx, profile, region, output_json, output_csv, verbose,
         click.echo(scanner.report_header())
 
     start = time.monotonic()
-    with output.spinner():
-        phantoms = scanner.find_phantom_users()
+    try:
+        with output.spinner():
+            phantoms = scanner.find_phantom_users()
+    except ClientError as e:
+        output.error(f"Failed to list IAM users: {e}")
+        sys.exit(1)
 
     if not quiet:
         click.echo(scanner.generate_table_report(phantoms))
