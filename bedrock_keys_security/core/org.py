@@ -151,6 +151,13 @@ class OrgScanner:
             record["status"] = "error"
             record["error"] = str(e)
             return record
+        except Exception as e:
+            # Defense in depth: a bug or malformed response in scanner must not
+            # crash the whole org run. Tag as unexpected so it stands out in the
+            # JSON output and the user can file a bug report.
+            record["status"] = "error"
+            record["error"] = f"unexpected: {type(e).__name__}: {e}"
+            return record
 
         record["phantom_users"] = phantoms
         record["summary"] = _summarize(phantoms)

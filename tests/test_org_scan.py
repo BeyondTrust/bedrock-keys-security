@@ -280,6 +280,47 @@ class TestScanAll:
         ok = next(a for a in result["accounts"] if a["account_id"] == "111111111111")
         assert ok["status"] == "ok"
 
+    def test_unexpected_exception_in_scanner_does_not_abort(self, patched_from_credentials):
+        """A non-AWS exception (KeyError, AttributeError, etc.) inside scanner
+        must be captured as status=error in the result, never abort the org-wide
+        run. Catches all-Exception defense-in-depth path.
+        """
+        base = _BaseStubSession(account_id="111111111111")
+        base.organizations.get_paginator.return_value = _list_accounts_response([
+            {"id": "111111111111", "name": "mgmt"},
+            {"id": "222222222222", "name": "broken"},
+        ])
+        _empty_iam(base.iam)
+        base.iam.get_paginator.return_value = _list_users_paginator([])
+
+        member = _BaseStubSession(account_id="222222222222")
+        _empty_iam(member.iam)
+        member.iam.get_paginator.side_effect = KeyError("unexpected boto3 shape")
+        patched_from_credentials["222222222222"] = member
+
+        base.sts.assume_role.return_value = {
+            "Credentials": {
+                "AccessKeyId": "ASIA",
+                "SecretAccessKey": "x",
+                "SessionToken": "t",
+                "Expiration": datetime(2099, 1, 1, tzinfo=timezone.utc),
+            },
+            "AssumedRoleUser": {
+                "Arn": "arn:aws:sts::222222222222:assumed-role/OrganizationAccountAccessRole/bks",
+                "AssumedRoleId": "AROA:bks",
+            },
+        }
+
+        scanner = OrgScanner(base_session=base)
+        result = scanner.scan_all()
+
+        assert result["scan_metadata"]["accounts_scanned"] == 1
+        assert result["scan_metadata"]["accounts_failed"] == 1
+        broken = next(a for a in result["accounts"] if a["account_id"] == "222222222222")
+        assert broken["status"] == "error"
+        assert "unexpected" in broken["error"]
+        assert "KeyError" in broken["error"]
+
     def test_accounts_filter_scopes_run(self, patched_from_credentials):
         base = _BaseStubSession(account_id="111111111111")
         base.organizations.get_paginator.return_value = _list_accounts_response([
