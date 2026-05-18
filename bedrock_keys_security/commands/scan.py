@@ -26,6 +26,9 @@ from bedrock_keys_security.utils.cli import aws_options, apply_aws_overrides, ap
 OUTPUT_DIR = Path("output")
 _ACCOUNT_ID_RE = re.compile(r"^\d{12}$")
 _ACCOUNT_LIST_RE = re.compile(r"^\d{12}(,\d{12})*$")
+# IAM role name spec: 1-64 chars from [A-Za-z0-9_+=,.@-]. Fail fast on bad
+# input instead of waiting for AssumeRole to reject it remotely.
+_ROLE_NAME_RE = re.compile(r"^[\w+=,.@-]{1,64}$")
 
 
 def build_output_path(command: str, account_id: str, ext: str, output_dir: Path = OUTPUT_DIR) -> Path:
@@ -59,6 +62,18 @@ def _parse_account_list(value: Optional[str], flag_name: str) -> Optional[List[s
             param_hint=flag_name,
         )
     return value.split(",")
+
+
+def _validate_role_name(value: Optional[str], flag_name: str) -> Optional[str]:
+    """Validate an IAM role name against AWS spec. Empty → None."""
+    if not value:
+        return None
+    if not _ROLE_NAME_RE.match(value):
+        raise click.BadParameter(
+            f"{flag_name} must be 1-64 chars from [A-Za-z0-9_+=,.@-]",
+            param_hint=flag_name,
+        )
+    return value
 
 
 @click.command()
@@ -95,7 +110,7 @@ def scan(ctx, profile, region, output_json, output_csv, verbose,
     if org_mode:
         _run_org_scan(
             ctx,
-            org_role=org_role or DEFAULT_ORG_ROLE,
+            org_role=_validate_role_name(org_role, "--org-role") or DEFAULT_ORG_ROLE,
             accounts_filter=_parse_account_list(org_accounts, "--org-accounts"),
             skip_accounts=_parse_account_list(org_skip, "--org-skip"),
             output_json=output_json,

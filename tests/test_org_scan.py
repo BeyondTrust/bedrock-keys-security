@@ -452,3 +452,9 @@ class TestCliWiring:
         result = runner.invoke(cli, ["scan", "--org", "--org-accounts", "not-an-account"])
         assert result.exit_code != 0
         assert "12-digit" in result.output
+
+    def test_org_role_with_invalid_chars_rejected(self, monkeypatch):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", "--org", "--org-role", "bad role with spaces"])
+        assert result.exit_code != 0
+        assert "--org-role" in result.output
