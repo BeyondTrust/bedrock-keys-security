@@ -1,6 +1,6 @@
 """Scan command - discover phantom IAM users"""
 
-import csv as _csv
+import csv
 import json
 import os
 import re
@@ -163,7 +163,7 @@ def _write_org_csv(path: Path, result: dict) -> None:
     """Flatten org result to one row per phantom user, account columns first."""
     rows = org_csv_rows(result)
     with open(path, 'w', newline='') as f:
-        writer = _csv.DictWriter(f, fieldnames=_ORG_CSV_FIELDS, extrasaction='ignore')
+        writer = csv.DictWriter(f, fieldnames=_ORG_CSV_FIELDS, extrasaction='ignore')
         writer.writeheader()
         for row in rows:
             row = dict(row)
