@@ -16,10 +16,7 @@ class AWSSession:
 
         try:
             session = boto3.Session(profile_name=profile, region_name=self.region)
-            self.session = session
-            self.iam = session.client("iam")
-            self.sts = session.client("sts")
-            self.cloudtrail = session.client("cloudtrail", region_name=self.region)
+            self._setup_clients(session)
 
             identity = self.sts.get_caller_identity()
             self.account_id = identity["Account"]
@@ -35,6 +32,17 @@ class AWSSession:
         except ClientError as e:
             output.error(f"Failed to initialize AWS session: {e}")
             sys.exit(1)
+
+    def _setup_clients(self, session: boto3.Session) -> None:
+        """Bind the boto3 clients used by every bks command to `self`.
+
+        Single source of truth so both constructors stay in sync when a new
+        AWS service is added.
+        """
+        self.session = session
+        self.iam = session.client("iam")
+        self.sts = session.client("sts")
+        self.cloudtrail = session.client("cloudtrail", region_name=self.region)
 
     @classmethod
     def from_credentials(
@@ -55,17 +63,15 @@ class AWSSession:
         """
         inst = cls.__new__(cls)
         inst.region = region or "us-east-1"
-        inst.session = boto3.Session(
+        inst._setup_clients(boto3.Session(
             aws_access_key_id=access_key,
             aws_secret_access_key=secret_key,
             aws_session_token=session_token,
             region_name=inst.region,
-        )
-        inst.iam = inst.session.client("iam")
-        inst.sts = inst.session.client("sts")
-        inst.cloudtrail = inst.session.client("cloudtrail", region_name=inst.region)
+        ))
         inst.account_id = account_id
         inst.caller_arn = caller_arn
         if verbose:
             output.info(f"Assumed role into account: {account_id}")
+            output.info(f"Caller Identity: {caller_arn}")
         return inst
