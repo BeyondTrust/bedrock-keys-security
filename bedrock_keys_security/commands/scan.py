@@ -26,8 +26,6 @@ from bedrock_keys_security.utils.cli import aws_options, apply_aws_overrides, ap
 OUTPUT_DIR = Path("output")
 _ACCOUNT_ID_RE = re.compile(r"^\d{12}$")
 _ACCOUNT_LIST_RE = re.compile(r"^\d{12}(,\d{12})*$")
-# IAM role name spec: 1-64 chars from [A-Za-z0-9_+=,.@-]. Fail fast on bad
-# input instead of waiting for AssumeRole to reject it remotely.
 _ROLE_NAME_RE = re.compile(r"^[\w+=,.@-]{1,64}$")
 
 
