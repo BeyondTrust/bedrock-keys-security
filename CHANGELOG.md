@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-05-19
+
+### Fixed
+
+- `bks --version` reported the wrong version on 1.2.0. `__version__` now reads from package metadata via `importlib.metadata.version()` so it cannot drift from `pyproject.toml`.
+
 ## [1.2.0] - 2026-05-19
 
 ### Added
