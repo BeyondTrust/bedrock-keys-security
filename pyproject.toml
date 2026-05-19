@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bedrock-keys-security"
-version = "1.1.0"
+version = "1.2.0"
 description = "The AWS Bedrock API keys security toolkit: offline decoder, phantom user discovery, incident response, cleanup, preventive SCPs and detection content."
 readme = "README.md"
 license = "Apache-2.0"
