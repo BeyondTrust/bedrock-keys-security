@@ -1,8 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: |
-  Bedrock API key SCPs. Mirrors the four JSON SCPs in scps/. Each SCP is
-  optional via parameters. Deploy in the AWS Organizations management
-  account; OU attachment is left to the operator.
+  Bedrock API key SCPs. Mirrors the five JSON SCPs in scps/bedrock/. Each
+  SCP is optional via parameters. Deploy in the AWS Organizations
+  management account; OU attachment is left to the operator.
 
   Source: https://github.com/BeyondTrust/bedrock-keys-security
 
@@ -12,6 +12,12 @@ Parameters:
     Default: 'true'
     AllowedValues: ['true', 'false']
     Description: Create the Block-Bedrock-API-Keys SCP (recommended baseline).
+
+  EnableBlockPhantomUserCreation:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Create the Block-Bedrock-Phantom-User-Creation SCP (deny iam:CreateUser on BedrockAPIKey-* and deny attaching AmazonBedrockLimitedAccess).
 
   EnableEnforce90DayMax:
     Type: String
@@ -33,6 +39,7 @@ Parameters:
 
 Conditions:
   CreateBlockAllKeys: !Equals [!Ref EnableBlockAllKeys, 'true']
+  CreateBlockPhantomUserCreation: !Equals [!Ref EnableBlockPhantomUserCreation, 'true']
   CreateEnforce90Day: !Equals [!Ref EnableEnforce90DayMax, 'true']
   CreateBlockLongTerm: !Equals [!Ref EnableBlockLongTermOnly, 'true']
   CreatePhantomBlock: !Equals [!Ref EnableBlockPhantomAccessKeys, 'true']
@@ -57,6 +64,31 @@ Resources:
           - Effect: Deny
             Action: bedrock:CallWithBearerToken
             Resource: '*'
+
+  BlockBedrockPhantomUserCreation:
+    Type: AWS::Organizations::Policy
+    Condition: CreateBlockPhantomUserCreation
+    Properties:
+      Name: Block-Bedrock-Phantom-User-Creation
+      Description: Deny iam:CreateUser on BedrockAPIKey-* and deny attaching AmazonBedrockLimitedAccess to any principal.
+      Type: SERVICE_CONTROL_POLICY
+      Content:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: BlockBedrockPhantomUserCreation
+            Effect: Deny
+            Action: iam:CreateUser
+            Resource: arn:aws:iam::*:user/BedrockAPIKey-*
+          - Sid: BlockAmazonBedrockLimitedAccessAttachment
+            Effect: Deny
+            Action:
+              - iam:AttachUserPolicy
+              - iam:AttachRolePolicy
+              - iam:AttachGroupPolicy
+            Resource: '*'
+            Condition:
+              ArnEquals:
+                iam:PolicyARN: arn:aws:iam::aws:policy/AmazonBedrockLimitedAccess
 
   Enforce90DayMaxBedrockKeyLifetime:
     Type: AWS::Organizations::Policy
@@ -84,7 +116,7 @@ Resources:
     Condition: CreateBlockLongTerm
     Properties:
       Name: Block-Long-Term-Bedrock-Keys
-      Description: Deny long-term (ABSK) bearer tokens; allow short-term.
+      Description: Deny long-term (ABSK) API keys; allow short-term.
       Type: SERVICE_CONTROL_POLICY
       Content:
         Version: '2012-10-17'
@@ -130,6 +162,9 @@ Outputs:
   BlockAllKeysPolicyId:
     Condition: CreateBlockAllKeys
     Value: !Ref BlockAllBedrockKeys
+  BlockPhantomUserCreationPolicyId:
+    Condition: CreateBlockPhantomUserCreation
+    Value: !Ref BlockBedrockPhantomUserCreation
   Enforce90DayPolicyId:
     Condition: CreateEnforce90Day
     Value: !Ref Enforce90DayMaxBedrockKeyLifetime

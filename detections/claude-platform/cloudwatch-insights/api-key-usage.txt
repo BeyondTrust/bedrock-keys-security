@@ -1,0 +1,14 @@
+# CloudWatch Logs Insights: Claude Platform on AWS API key usage by principal.
+# Recommended alarm: result count > 100/hour (tune to your baseline).
+#
+# Unlike Bedrock where callWithBearerToken lives under
+# additionalEventData, the Claude Platform service nests both
+# callWithBearerToken and bearerTokenType inside requestParameters.
+# CloudTrail-to-CWLogs serialises booleans as the string "true", so the
+# filter quotes the value accordingly.
+
+fields @timestamp, userIdentity.userName, sourceIPAddress, eventName, requestParameters.bearerTokenType, userAgent
+| filter eventSource = "aws-external-anthropic.amazonaws.com"
+       and requestParameters.callWithBearerToken = "true"
+| stats count() by eventName, userIdentity.userName, requestParameters.bearerTokenType
+| sort count desc

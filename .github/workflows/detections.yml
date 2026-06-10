@@ -4,14 +4,14 @@ on:
   push:
     branches: ["main"]
     paths:
-      - "detections/sigma/**"
-      - "detections/eventbridge/**"
+      - "detections/*/sigma/**"
+      - "detections/*/eventbridge/**"
       - ".github/workflows/detections.yml"
   pull_request:
     branches: ["main"]
     paths:
-      - "detections/sigma/**"
-      - "detections/eventbridge/**"
+      - "detections/*/sigma/**"
+      - "detections/*/eventbridge/**"
       - ".github/workflows/detections.yml"
 
 jobs:
@@ -36,7 +36,7 @@ jobs:
         run: |
           set -u
           fail=0
-          for f in detections/sigma/*.yml; do
+          for f in detections/*/sigma/*.yml; do
             if sigma convert -t splunk --without-pipeline "$f" > /dev/null 2>&1; then
               echo "OK   $f"
             else
@@ -69,7 +69,7 @@ jobs:
           python3 - <<'PY'
           import json, glob, sys
           fail = 0
-          for f in sorted(glob.glob("detections/eventbridge/*.json")):
+          for f in sorted(glob.glob("detections/*/eventbridge/*.json")):
               try:
                   d = json.load(open(f))
               except Exception as e:

@@ -1,0 +1,233 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: |
+  Claude Platform on AWS SCPs. Mirrors the six JSON SCPs in
+  scps/claude-platform/. Each SCP is optional via parameters. Deploy in
+  the AWS Organizations management account; OU attachment is left to
+  the operator.
+
+  Source: https://github.com/BeyondTrust/bedrock-keys-security
+
+Parameters:
+  EnableBlockAllKeys:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: Create the Block-Claude-Platform-API-Keys SCP (recommended baseline).
+
+  EnableBlockPhantomUserCreation:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Create the Block-Claude-Platform-Phantom-User-Creation SCP.
+
+  EnableBlockLongTermOnly:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Create the long-term-only block SCP (allow short-term keys).
+
+  EnableBlockPhantomAccessKeys:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: Create the phantom-user escalation block SCP (recommended baseline).
+
+  EnableEnforce90DayMax:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Create the 90-day max lifetime SCP.
+
+  EnableWorkspaceAllowlist:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Create the workspace-allowlist SCP. Requires WorkspaceId and PermittedPrincipalArns.
+
+  WorkspaceId:
+    Type: String
+    Default: ''
+    Description: Claude Platform workspace ID (e.g. wrkspc_<26-char-ulid>). Required when EnableWorkspaceAllowlist is true.
+
+  PermittedPrincipalArns:
+    Type: CommaDelimitedList
+    Default: ''
+    Description: Comma-separated list of ARN patterns allowed on the protected workspace (ArnNotLike). Required when EnableWorkspaceAllowlist is true.
+
+Conditions:
+  CreateBlockAllKeys: !Equals [!Ref EnableBlockAllKeys, 'true']
+  CreateBlockPhantomUserCreation: !Equals [!Ref EnableBlockPhantomUserCreation, 'true']
+  CreateBlockLongTerm: !Equals [!Ref EnableBlockLongTermOnly, 'true']
+  CreatePhantomBlock: !Equals [!Ref EnableBlockPhantomAccessKeys, 'true']
+  CreateEnforce90Day: !Equals [!Ref EnableEnforce90DayMax, 'true']
+  CreateWorkspaceAllowlist: !Equals [!Ref EnableWorkspaceAllowlist, 'true']
+
+Resources:
+  BlockAllClaudePlatformKeys:
+    Type: AWS::Organizations::Policy
+    Condition: CreateBlockAllKeys
+    Properties:
+      Name: Block-Claude-Platform-API-Keys
+      Description: Deny creation and use of any Claude Platform API key and block the OIDC token-issuance path.
+      Type: SERVICE_CONTROL_POLICY
+      Content:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: BlockClaudePlatformCredentialCreation
+            Effect: Deny
+            Action: iam:CreateServiceSpecificCredential
+            Resource: '*'
+            Condition:
+              StringEquals:
+                iam:ServiceSpecificCredentialServiceName: aws-external-anthropic.amazonaws.com
+          - Sid: BlockClaudePlatformApiKeyUse
+            Effect: Deny
+            Action: aws-external-anthropic:CallWithBearerToken
+            Resource: '*'
+          - Sid: BlockClaudePlatformPhantomUserCreation
+            Effect: Deny
+            Action: iam:CreateUser
+            Resource: arn:aws:iam::*:user/AeaApiKey-*
+          - Sid: BlockClaudePlatformWebIdentityToken
+            Effect: Deny
+            Action:
+              - sts:GetWebIdentityToken
+              - sts:TagGetWebIdentityToken
+            Resource: '*'
+            Condition:
+              ForAnyValue:StringEquals:
+                sts:IdentityTokenAudience:
+                  - https://api.anthropic.com
+                  - https://platform.claude.com
+
+  BlockClaudePlatformPhantomUserCreation:
+    Type: AWS::Organizations::Policy
+    Condition: CreateBlockPhantomUserCreation
+    Properties:
+      Name: Block-Claude-Platform-Phantom-User-Creation
+      Description: Deny iam:CreateUser on AeaApiKey-* and deny attaching AnthropicLimitedAccess to any principal.
+      Type: SERVICE_CONTROL_POLICY
+      Content:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: BlockClaudePlatformPhantomUserCreation
+            Effect: Deny
+            Action: iam:CreateUser
+            Resource: arn:aws:iam::*:user/AeaApiKey-*
+          - Sid: BlockAnthropicLimitedAccessAttachment
+            Effect: Deny
+            Action:
+              - iam:AttachUserPolicy
+              - iam:AttachRolePolicy
+              - iam:AttachGroupPolicy
+            Resource: '*'
+            Condition:
+              ArnEquals:
+                iam:PolicyARN: arn:aws:iam::aws:policy/AnthropicLimitedAccess
+
+  BlockLongTermClaudePlatformKeys:
+    Type: AWS::Organizations::Policy
+    Condition: CreateBlockLongTerm
+    Properties:
+      Name: Block-Long-Term-Claude-Platform-Keys
+      Description: Deny long-term Claude Platform API keys; allow short-term.
+      Type: SERVICE_CONTROL_POLICY
+      Content:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: BlockClaudePlatformLongTermApiKeyUse
+            Effect: Deny
+            Action: aws-external-anthropic:CallWithBearerToken
+            Resource: '*'
+            Condition:
+              StringEquals:
+                aws-external-anthropic:BearerTokenType: LONG_TERM
+
+  BlockClaudePlatformPhantomUserEscalation:
+    Type: AWS::Organizations::Policy
+    Condition: CreatePhantomBlock
+    Properties:
+      Name: Block-Claude-Platform-Phantom-User-Escalation
+      Description: Deny IAM access key, console login and MFA on AeaApiKey-* phantom users.
+      Type: SERVICE_CONTROL_POLICY
+      Content:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: BlockClaudePlatformPhantomAccessKeyCreation
+            Effect: Deny
+            Action:
+              - iam:CreateAccessKey
+            Resource: arn:aws:iam::*:user/AeaApiKey-*
+          - Sid: BlockClaudePlatformPhantomConsoleAccess
+            Effect: Deny
+            Action:
+              - iam:CreateLoginProfile
+              - iam:UpdateLoginProfile
+            Resource: arn:aws:iam::*:user/AeaApiKey-*
+          - Sid: BlockClaudePlatformPhantomMFADevices
+            Effect: Deny
+            Action:
+              - iam:EnableMFADevice
+              - iam:CreateVirtualMFADevice
+            Resource:
+              - arn:aws:iam::*:user/AeaApiKey-*
+              - arn:aws:iam::*:mfa/AeaApiKey-*
+
+  Enforce90DayMaxClaudePlatformKeyLifetime:
+    Type: AWS::Organizations::Policy
+    Condition: CreateEnforce90Day
+    Properties:
+      Name: Enforce-Claude-Platform-90Day-Max
+      Description: Cap Claude Platform service-specific credential lifetime at 90 days (blocks Never expires).
+      Type: SERVICE_CONTROL_POLICY
+      Content:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnforceClaudePlatform90DayMaxExpiry
+            Effect: Deny
+            Action:
+              - iam:CreateServiceSpecificCredential
+            Resource: '*'
+            Condition:
+              StringEquals:
+                iam:ServiceSpecificCredentialServiceName: aws-external-anthropic.amazonaws.com
+              NumericGreaterThan:
+                iam:ServiceSpecificCredentialAgeDays: '90'
+
+  ClaudePlatformWorkspaceAllowlist:
+    Type: AWS::Organizations::Policy
+    Condition: CreateWorkspaceAllowlist
+    Properties:
+      Name: Claude-Platform-Workspace-Allowlist
+      Description: Restrict aws-external-anthropic:* on a specific workspace to an allowlist of principals.
+      Type: SERVICE_CONTROL_POLICY
+      Content:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyUnauthorizedAccessToProtectedWorkspace
+            Effect: Deny
+            Action: aws-external-anthropic:*
+            Resource: !Sub 'arn:aws:aws-external-anthropic:*:*:workspace/${WorkspaceId}'
+            Condition:
+              ArnNotLike:
+                aws:PrincipalArn: !Ref PermittedPrincipalArns
+
+Outputs:
+  BlockAllKeysPolicyId:
+    Condition: CreateBlockAllKeys
+    Value: !Ref BlockAllClaudePlatformKeys
+  BlockPhantomUserCreationPolicyId:
+    Condition: CreateBlockPhantomUserCreation
+    Value: !Ref BlockClaudePlatformPhantomUserCreation
+  BlockLongTermPolicyId:
+    Condition: CreateBlockLongTerm
+    Value: !Ref BlockLongTermClaudePlatformKeys
+  BlockPhantomEscalationPolicyId:
+    Condition: CreatePhantomBlock
+    Value: !Ref BlockClaudePlatformPhantomUserEscalation
+  Enforce90DayPolicyId:
+    Condition: CreateEnforce90Day
+    Value: !Ref Enforce90DayMaxClaudePlatformKeyLifetime
+  WorkspaceAllowlistPolicyId:
+    Condition: CreateWorkspaceAllowlist
+    Value: !Ref ClaudePlatformWorkspaceAllowlist

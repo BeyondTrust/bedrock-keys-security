@@ -1,0 +1,65 @@
+title: Claude Platform API Key Data-Plane Call (correlation base)
+id: e0a5dc56-bb5e-4703-b350-79894187c092
+name: claude_platform_api_key_data_plane_call
+status: stable
+description: |
+    Base rule for the cross-region correlation. Matches Claude Platform
+    API-key-authenticated data-plane calls (CreateInference and every other
+    inference / batch / file operation) by selecting CloudTrail
+    eventCategory=Data. On Claude Platform the inference surface is logged as
+    data events while workspace / vault operations are management events, so
+    eventCategory=Data admits all inference traffic without enumerating verb
+    names (avoiding false negatives on un-enumerated routes) and excludes the
+    default-logged management calls (ListWorkspaces, GetWorkspace) that would
+    otherwise trip the high-severity cross-region correlation. Anchored on
+    requestParameters.callWithBearerToken so it works for long-term (AEAA) and
+    short-term keys regardless of userName. Requires the data-event selector
+    AWS::AWSExternalAnthropic::Workspace on the trail.
+references:
+    - https://github.com/BeyondTrust/bedrock-keys-security
+author: BeyondTrust Phantom Labs
+date: 2026/05/28
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    selection:
+        eventSource: aws-external-anthropic.amazonaws.com
+        eventCategory: Data
+        requestParameters.callWithBearerToken: true
+    condition: selection
+level: informational
+---
+title: Claude Platform API key Used Across Multiple Regions
+id: b9f780ce-46c8-4a63-ad78-40ec61ce1b2f
+status: experimental
+description: |
+    Detects the same Claude Platform API key principal issuing
+    API-key-authenticated data-plane calls across two or more AWS
+    regions within 30 minutes. Canonical LLMjacking pattern:
+    stolen keys spun up across regions to maximise foundation-model
+    throughput. Aggregates by userIdentity.principalId so both
+    long-term keys (AeaApiKey-* phantom users) and short-term keys
+    (STS-derived, where the API key's ASIA carries the operator's
+    session identity) are caught.
+references:
+    - https://github.com/BeyondTrust/bedrock-keys-security#llmjacking
+author: BeyondTrust Phantom Labs
+date: 2026/05/28
+tags:
+    - attack.impact
+    - attack.t1496
+correlation:
+    type: value_count
+    rules:
+        - claude_platform_api_key_data_plane_call
+    group-by:
+        - userIdentity.principalId
+    timespan: 30m
+    condition:
+        field: awsRegion
+        gte: 2
+falsepositives:
+    - Legitimate multi-region deployments. Allowlist known production
+      principals or scope by tag.
+level: high

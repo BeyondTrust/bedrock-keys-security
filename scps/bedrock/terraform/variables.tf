@@ -4,6 +4,12 @@ variable "enable_block_all_keys" {
   default     = true
 }
 
+variable "enable_block_phantom_user_creation" {
+  description = "Create the Block-Bedrock-Phantom-User-Creation SCP (deny iam:CreateUser on BedrockAPIKey-* and attaching AmazonBedrockLimitedAccess)."
+  type        = bool
+  default     = false
+}
+
 variable "enable_enforce_90day_max" {
   description = "Create the Enforce-90Day-Max-Lifetime SCP."
   type        = bool

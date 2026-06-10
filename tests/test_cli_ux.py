@@ -5,7 +5,6 @@ Covers behavior that the decoder suite does not reach:
   silenced; error always emits to stderr)
 - format_decode_table_output() no longer carries a "Format:" line for
   either key type
-- PhantomUserScanner.report_header() shape (2 visible lines)
 - PhantomUserScanner.find_phantom_users() sets last_users_scanned to
   the total IAM users iterated, not just phantom matches
 - cleanup_orphaned_users() pluralization at n=1 vs n>1
@@ -133,7 +132,7 @@ class TestFormatDecodeTableOutput:
             "action": "CallWithBearerToken",
             "api_version": "2023-09-30",
             "access_key_id": "ASIATESTEXAMPLE",
-            "service": "bedrock",
+            "sigv4_service": "bedrock",
             "region": "us-east-1",
             "account_id": "123456789012",
             "issued_at": "2026-05-04T12:00:00+00:00",
@@ -146,21 +145,13 @@ class TestFormatDecodeTableOutput:
         rendered = click.unstyle(output.format_decode_table_output(result))
         assert "Format:" not in rendered
         assert "ASIATESTEXAMPLE" in rendered
-
-
-class TestReportHeader:
-    def test_two_line_banner(self):
-        session = _StubSession(account_id="123456789012", region="eu-west-1")
-        scanner = PhantomUserScanner(aws_session=session)
-
-        visible = click.unstyle(scanner.report_header()).strip()
-        lines = visible.splitlines()
-
-        assert len(lines) == 2
-        assert lines[0].startswith("bks v")
-        assert "BedrockAPIKey-* phantom user scanner" in lines[0]
-        assert "Account: 123456789012" in lines[1]
-        assert "Region: eu-west-1" in lines[1]
+        # The Service line reads the renamed `sigv4_service` field (not the old
+        # `service` key); assert it renders the value rather than N/A so this
+        # stays covered after the decoder field rename.
+        service_line = next(
+            line for line in rendered.splitlines() if line.strip().startswith("Service:")
+        )
+        assert "bedrock" in service_line and "N/A" not in service_line
 
 
 class TestLastUsersScanned:
@@ -202,8 +193,8 @@ class TestCleanupPluralization:
         )
 
         out = click.unstyle(capsys.readouterr().out)
-        assert "Orphaned Phantom User Found: 1" in out
-        assert "Orphaned Phantom Users Found" not in out
+        assert "Orphaned Bedrock Phantom User Found: 1" in out
+        assert "Orphaned Bedrock Phantom Users Found" not in out
         assert "This user has no active credentials" in out
 
     def test_multiple_orphans_use_plural_phrasing(self, capsys):
@@ -218,7 +209,7 @@ class TestCleanupPluralization:
         scanner.cleanup_orphaned_users(phantoms, dry_run=True, force=True)
 
         out = click.unstyle(capsys.readouterr().out)
-        assert "Orphaned Phantom Users Found: 3" in out
+        assert "Orphaned Bedrock Phantom Users Found: 3" in out
         assert "The following users have no active credentials" in out
 
 

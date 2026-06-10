@@ -121,7 +121,7 @@ class TestDecodeShortTerm:
         assert result["type"] == "short-term"
         assert result["access_key_id"] == "ASIATESTEXAMPLE"
         assert result["region"] == "us-east-1"
-        assert result["service"] == "bedrock"
+        assert result["sigv4_service"] == "bedrock"
         assert result["account_id"] == "123456789012"
         assert result["action"] == "CallWithBearerToken"
         assert result["issued_at"] == "2026-05-04T12:00:00+00:00"

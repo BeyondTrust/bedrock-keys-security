@@ -1,9 +1,9 @@
--- Bearer token used in 2+ regions within 1 hour (LLMjacking fan-out).
+-- API key used in 2+ regions within 1 hour (LLMjacking).
 --
 -- Anchored on additionalEventData.callWithBearerToken (the universal
 -- signal for any Bedrock API key request), so this query catches both
 -- long-term keys (phantom users) and short-term keys (STS-derived
--- bearer tokens). Aggregating by principalId (not userName) is what
+-- API keys). Aggregating by principalId (not userName) is what
 -- makes short-term keys visible: their userName is the assumed role
 -- or session name, not BedrockAPIKey-*.
 --

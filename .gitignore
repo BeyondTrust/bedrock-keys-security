@@ -27,8 +27,9 @@ output/
 *.log
 
 # Terraform: ignore everything generated locally. Lock file omitted because
-# scps/terraform is consumed as a module (source = "./scps/terraform"), where
-# the consumer's lock file does the pinning.
+# scps/bedrock/terraform and scps/claude-platform/terraform are consumed as
+# modules (source = "./scps/<surface>/terraform"), so the consumer's lock file
+# does the pinning.
 .terraform/
 .terraform.lock.hcl
 *.tfstate

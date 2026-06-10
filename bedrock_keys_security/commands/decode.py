@@ -1,4 +1,4 @@
-"""Decode-key command - offline Bedrock API key forensics"""
+"""Decode-key command - offline forensics for any supported API key format"""
 
 import json
 import sys
@@ -6,7 +6,7 @@ import sys
 import click
 
 from bedrock_keys_security.commands.scan import build_output_path, write_secure
-from bedrock_keys_security.core.decoder import BedrockKeyDecoder, redact_for_display
+from bedrock_keys_security.core.multi_decoder import decode_any_key, redact_for_display
 from bedrock_keys_security.utils.output import format_decode_table_output
 
 
@@ -16,8 +16,13 @@ from bedrock_keys_security.utils.output import format_decode_table_output
               help='Save decoded analysis as JSON to output/ directory')
 @click.pass_context
 def decode_key(ctx, key, output_json):
-    """Decode Bedrock API key (no AWS credentials needed)"""
-    raw = BedrockKeyDecoder.decode_key(key)
+    """Decode a Bedrock or Claude Platform API key (no AWS credentials needed).
+
+    Supports both Bedrock (ABSK, bedrock-api-key-) and Claude Platform
+    on AWS (AEAA, aws-external-anthropic-api-key-) formats; the service is
+    detected automatically from the API key prefix.
+    """
+    raw = decode_any_key(key)
     result = redact_for_display(raw)
 
     if output_json:

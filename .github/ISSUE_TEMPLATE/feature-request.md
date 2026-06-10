@@ -12,8 +12,8 @@ One-line description:
 - [ ] CLI (new command or flag)
 - [ ] Library API (`bedrock_keys_security` package)
 - [ ] Detection content (new Sigma rule, EventBridge pattern, CloudTrail Lake or Athena query, CloudWatch Insights query)
-- [ ] SCP template (new policy or variant in `scps/`)
-- [ ] IaC module (`scps/terraform/` or `scps/cloudformation/`)
+- [ ] SCP template (new policy or variant in `scps/bedrock/` or `scps/claude-platform/`)
+- [ ] IaC module (`scps/bedrock/terraform/`, `scps/bedrock/cloudformation/`, `scps/claude-platform/terraform/` or `scps/claude-platform/cloudformation/`)
 - [ ] Documentation
 - [ ] Other:
 

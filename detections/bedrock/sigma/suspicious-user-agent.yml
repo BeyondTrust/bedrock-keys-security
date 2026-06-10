@@ -6,7 +6,9 @@ description: |
     commonly observed in LLMjacking operations. Legitimate applications
     use AWS SDK user-agent strings; attackers running concurrent
     asynchronous requests at volume use python-requests, aiohttp or curl
-    defaults.
+    defaults. Heuristic and trivially evadable: an attacker using the
+    genuine SDK presents a normal user-agent, so treat this as a
+    low-confidence hunting signal, not a standalone alert.
 references:
     - https://sysdig.com/blog/growing-dangers-of-llmjacking
     - https://github.com/BeyondTrust/bedrock-keys-security
@@ -19,13 +21,13 @@ logsource:
     product: aws
     service: cloudtrail
 detection:
-    bearer_token:
+    api_key:
         eventSource: bedrock.amazonaws.com
         additionalEventData.callWithBearerToken: true
     suspicious_ua:
         userAgent|re: '(?i)(python-requests|aiohttp|curl/|httpx|axios|node-fetch)'
-    condition: bearer_token and suspicious_ua
+    condition: api_key and suspicious_ua
 falsepositives:
     - Legitimate scripts and CI jobs using non-SDK HTTP clients. Allowlist
       by sourceIPAddress or principalId before alerting.
-level: high
+level: low

@@ -72,6 +72,7 @@ class BedrockKeyDecoder:
                 )
 
             return {
+                'bks_service': 'bedrock',
                 'type': 'long-term',
                 'format': 'ABSK + base64(username-at-accountid:secret)',
                 'username': username,
@@ -92,6 +93,7 @@ class BedrockKeyDecoder:
         except Exception as e:
             return {
                 'error': f'Decoding failed: {str(e)}',
+                'bks_service': 'bedrock',
                 'type': 'long-term',
             }
 
@@ -152,6 +154,7 @@ class BedrockKeyDecoder:
             )
 
             return {
+                'bks_service': 'bedrock',
                 'type': 'short-term',
                 'format': 'bedrock-api-key- + base64(presigned_url)',
                 'presigned_url': decoded_url,
@@ -159,7 +162,7 @@ class BedrockKeyDecoder:
                 'action': first('Action'),
                 'api_version': first('Version'),
                 'access_key_id': access_key_id,
-                'service': service,
+                'sigv4_service': service,
                 'region': region,
                 'account_id': account_id,
                 'date': date,
@@ -184,6 +187,7 @@ class BedrockKeyDecoder:
         except Exception as e:
             return {
                 'error': f'Decoding failed: {str(e)}',
+                'bks_service': 'bedrock',
                 'type': 'short-term',
             }
 

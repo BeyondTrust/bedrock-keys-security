@@ -3,6 +3,9 @@
 import click
 
 from bedrock_keys_security.core.decoder import BedrockKeyDecoder
+from bedrock_keys_security.core.decoder_claude_platform import (
+    ClaudePlatformKeyDecoder,
+)
 
 
 def aws_options(f):
@@ -36,9 +39,17 @@ def apply_quiet_override(ctx, quiet_flag):
 
 
 def resolve_username(value: str) -> str:
-    """Accept an IAM username or a Bedrock API key; ABSK keys are decoded to their phantom username.
+    """Accept an IAM username or any supported long-term API key.
 
-    Short-term keys raise a ClickException pointing at the aws:TokenIssueTime IR path.
+    Long-term API key formats are decoded offline to recover the backing
+    phantom username:
+
+    - ``ABSK`` (Bedrock long-term)
+    - ``AEAA`` (Claude Platform long-term)
+
+    Short-term formats have no IAM phantom user to act on directly; the
+    function raises a ClickException pointing at the appropriate
+    incident-response path for each service.
     """
     if value.startswith(BedrockKeyDecoder.LONG_TERM_PREFIX):
         result = BedrockKeyDecoder.decode_long_term_key(value)
@@ -47,10 +58,35 @@ def resolve_username(value: str) -> str:
                 f"Input looks like an ABSK key but could not be decoded: {result['error']}"
             )
         return result['username']
+    if value.startswith(ClaudePlatformKeyDecoder.LONG_TERM_PREFIX):
+        result = ClaudePlatformKeyDecoder.decode_long_term_key(value)
+        if 'error' in result:
+            raise click.ClickException(
+                f"Input looks like an AEAA Claude Platform key but could not be decoded: {result['error']}"
+            )
+        return result['username']
     if value.startswith(BedrockKeyDecoder.SHORT_TERM_PREFIX):
         raise click.ClickException(
-            "Short-term keys (bedrock-api-key-*) have no phantom user to act on. "
-            "Apply an aws:TokenIssueTime deny policy on the issuing principal instead "
-            "(see the incident response runbook in README)."
+            "Short-term Bedrock keys (bedrock-api-key-*) have no phantom IAM user to build "
+            "an incident report on. Use `bks timeline <bedrock-api-key-...>` to see who used "
+            "the key, or `bks revoke-key <bedrock-api-key-...>` to deny the issuing principal."
+        )
+    if value.startswith(ClaudePlatformKeyDecoder.SHORT_TERM_PREFIX):
+        raise click.ClickException(
+            "Short-term Claude Platform keys (aws-external-anthropic-api-key-*) have no phantom "
+            "IAM user to build an incident report on. Use "
+            "`bks timeline <aws-external-anthropic-api-key-...>` to see who used the key, or "
+            "`bks revoke-key <aws-external-anthropic-api-key-...>` to act on the issuing principal."
         )
     return value
+
+
+def select_scanner(ctx, username: str):
+    """Return the scanner that owns a phantom username by prefix.
+
+    - ``AeaApiKey-*`` routes to the Claude Platform scanner.
+    - ``BedrockAPIKey-*`` (and everything else) routes to the Bedrock scanner.
+    """
+    if username.startswith("AeaApiKey-"):
+        return ctx.obj.claude_platform_scanner
+    return ctx.obj.scanner

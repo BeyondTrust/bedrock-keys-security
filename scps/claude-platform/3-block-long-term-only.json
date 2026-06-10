@@ -1,0 +1,16 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "BlockClaudePlatformLongTermApiKeyUse",
+      "Effect": "Deny",
+      "Action": "aws-external-anthropic:CallWithBearerToken",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws-external-anthropic:BearerTokenType": "LONG_TERM"
+        }
+      }
+    }
+  ]
+}

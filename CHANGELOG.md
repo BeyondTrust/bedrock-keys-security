@@ -1,6 +1,26 @@
 # Changelog
 
-## [Unreleased]
+## [1.3.0] - 2026-06-30
+
+### Added
+
+- [Claude Platform on AWS](https://docs.aws.amazon.com/claude-platform/latest/userguide/welcome.html) coverage. BKS detects, decodes, scans and contains `AeaApiKey-*` phantom users (the `aws-external-anthropic` service auto-provisions them with [`AnthropicLimitedAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AnthropicLimitedAccess.html)), the same way it already does for Bedrock.
+- `bks scan --service [bedrock|claude-platform|all]`, default `all`. Same flag on `bks cleanup` and `bks scan --org`.
+- `bks revoke-key`, `bks timeline` and `bks report` autodetect the service from the username or decoded key prefix.
+- `bks revoke-key` on a Claude Platform phantom: inline `aws-external-anthropic:*` deny + delete service-specific credentials + disable the phantom user's IAM access keys.
+- `bks decode-key` auto-detects the format; new prefixes `AEAA` (long-term) and `aws-external-anthropic-api-key-` (short-term).
+- `bks timeline` accepts short-term keys: decodes the embedded `ASIA`, anchors on `AccessKeyId=`, and surfaces the operator (ARN, source IP, user agent, Identity Center user) behind each call.
+- Claude Platform SCPs under `scps/claude-platform/` (full lockout, block phantom-user creation, long-term-only, block phantom access keys, 90-day max, workspace allowlist), with Terraform / CloudFormation modules.
+- New SCP `scps/bedrock/2-block-phantom-user-creation.json`.
+- Detection content for Claude Platform (Sigma, EventBridge, CloudTrail Lake, Athena, CloudWatch Insights).
+- `ClaudePlatformKeyDecoder`, `ClaudePlatformPhantomScanner` and `multi_decoder.decode_any_key()` / `detect_service()` exposed for library users.
+- pytest suite expanded with Claude Platform decoder, scanner, timeline, revoke and scan-rendering coverage.
+
+### Breaking
+
+- Bedrock SCPs moved under `scps/bedrock/`. Terraform `source` becomes `/scps/bedrock/terraform`.
+- Detection files moved to `detections/<surface>/<format>/`. Update SIEM wildcards to `detections/*/sigma/*.yml`, etc.
+- Bedrock short-term decoder field `service` renamed to `sigv4_service`.
 
 ## [1.2.1] - 2026-05-19
 
@@ -12,7 +32,7 @@
 
 ### Added
 
-- `--org` flag on `scan`: organization-wide scan via `sts:AssumeRole` fan-out across every ACTIVE member account, with per-account fail isolation.
+- `--org` flag on `scan`: organization-wide scan via `sts:AssumeRole` across every ACTIVE member account, with per-account fail isolation.
 - `--org-role NAME` flag on `scan` (default `OrganizationAccountAccessRole`): cross-account role to assume in each member account.
 - `--org-accounts IDS` flag on `scan`: scope `--org` to comma-separated 12-digit account IDs.
 - `--org-skip IDS` flag on `scan`: exclude comma-separated 12-digit account IDs from `--org`.
@@ -21,14 +41,14 @@
 
 ### Breaking
 
-- `--json` and `--csv` on every command write to `output/bks-<command>-<account>-<UTC>.<ext>` instead of streaming to stdout. SOAR pipelines should read the saved-file path from the final stdout line.
+- `--json` and `--csv` on every command write to `output/bks-<command>-<account>-<UTC>.<ext>` instead of streaming to stdout.
 - `bks scan --csv` is now flag-only (no `<FILE>` argument).
 - `scanner.revoke_key`, `scanner.revoke_short_term_key`, `scanner.cleanup_orphaned_users`, and `scanner.generate_timeline` return `Dict` instead of `bool` / `None`.
 - IaC modules moved from `iac/` to `scps/`. Terraform consumers using `source = "...//iac/terraform"` must update to `//scps/terraform`.
 
 ### Added
 
-- `--quiet` / `-q` flag for SOAR pipelines, accepted at group and per-command level.
+- `--quiet` / `-q` flag, accepted at group and per-command level.
 - `--output-dir DIR` global flag (default `./output`) to redirect JSON / CSV reports.
 - `--region` global flag plus per-command override.
 - `--json` on cleanup, revoke-key, timeline, and report.
