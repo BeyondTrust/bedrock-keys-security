@@ -1,0 +1,34 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "BlockClaudePlatformPhantomAccessKeyCreation",
+      "Effect": "Deny",
+      "Action": [
+        "iam:CreateAccessKey"
+      ],
+      "Resource": "arn:aws:iam::*:user/AeaApiKey-*"
+    },
+    {
+      "Sid": "BlockClaudePlatformPhantomConsoleAccess",
+      "Effect": "Deny",
+      "Action": [
+        "iam:CreateLoginProfile",
+        "iam:UpdateLoginProfile"
+      ],
+      "Resource": "arn:aws:iam::*:user/AeaApiKey-*"
+    },
+    {
+      "Sid": "BlockClaudePlatformPhantomMFADevices",
+      "Effect": "Deny",
+      "Action": [
+        "iam:EnableMFADevice",
+        "iam:CreateVirtualMFADevice"
+      ],
+      "Resource": [
+        "arn:aws:iam::*:user/AeaApiKey-*",
+        "arn:aws:iam::*:mfa/AeaApiKey-*"
+      ]
+    }
+  ]
+}

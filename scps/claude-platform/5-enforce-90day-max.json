@@ -1,0 +1,21 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "EnforceClaudePlatform90DayMaxExpiry",
+      "Effect": "Deny",
+      "Action": [
+        "iam:CreateServiceSpecificCredential"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "iam:ServiceSpecificCredentialServiceName": "aws-external-anthropic.amazonaws.com"
+        },
+        "NumericGreaterThan": {
+          "iam:ServiceSpecificCredentialAgeDays": "90"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+title: Claude Platform API Key Used With Suspicious User Agent
+id: b8af0ecd-6b03-463a-bd4f-8abbdcffe207
+status: experimental
+description: |
+    Detects Claude Platform API key usage from generic or scripted HTTP
+    clients commonly observed in LLMjacking operations. Legitimate
+    applications use the Anthropic SDK or the AWS SDK user-agent
+    strings; attackers running concurrent asynchronous requests at
+    volume use python-requests, aiohttp or curl defaults. Heuristic and
+    trivially evadable: an attacker using the genuine SDK presents a
+    normal user-agent, so treat this as a low-confidence hunting
+    signal, not a standalone alert.
+references:
+    - https://sysdig.com/blog/growing-dangers-of-llmjacking
+    - https://github.com/BeyondTrust/bedrock-keys-security
+author: BeyondTrust Phantom Labs
+date: 2026/05/28
+tags:
+    - attack.impact
+    - attack.t1496
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    api_key:
+        eventSource: aws-external-anthropic.amazonaws.com
+        requestParameters.callWithBearerToken: true
+    suspicious_ua:
+        userAgent|re: '(?i)(python-requests|aiohttp|curl/|httpx|axios|node-fetch)'
+    condition: api_key and suspicious_ua
+# Requires the data-event selector AWS::AWSExternalAnthropic::Workspace on the trail (CallWithBearerToken events are CloudTrail Data events).
+falsepositives:
+    - Legitimate scripts and CI jobs using non-SDK HTTP clients. Allowlist
+      by sourceIPAddress or principalId before alerting.
+level: low

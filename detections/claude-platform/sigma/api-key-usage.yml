@@ -1,0 +1,29 @@
+title: Claude Platform API Key Usage (callWithBearerToken Signal)
+id: 7a2eddf6-8420-4ec4-9ec4-1c0c4bcdec74
+status: stable
+description: |
+    Primary detection signal for any Claude Platform on AWS API key
+    request. Every long-term (AEAA) and short-term
+    (aws-external-anthropic-api-key-) API key use records
+    requestParameters.callWithBearerToken = true in CloudTrail; standard
+    SigV4-authenticated requests against the same service do not. If this
+    rule fires, a Claude Platform API key was used to invoke the workspace.
+references:
+    - https://github.com/BeyondTrust/bedrock-keys-security
+author: BeyondTrust Phantom Labs
+date: 2026/05/20
+tags:
+    - attack.credential_access
+    - attack.t1078.004
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    selection:
+        eventSource: aws-external-anthropic.amazonaws.com
+        requestParameters.callWithBearerToken: true
+    condition: selection
+falsepositives:
+    - Legitimate use of Claude Platform API keys by sanctioned applications.
+      Allowlist known principals or pair with source-IP allowlisting.
+level: low

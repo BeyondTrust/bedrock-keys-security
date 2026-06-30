@@ -1,0 +1,32 @@
+title: Claude Platform Phantom IAM User Created (AeaApiKey-*)
+id: 5cfa44e8-72fe-4731-a930-b6cba18bafd1
+status: stable
+description: |
+    Detects creation of an IAM user matching the AeaApiKey-* naming
+    convention. The Claude Platform console provisions one IAM user per
+    long-term API key with this prefix and attaches the AWS-managed
+    AnthropicLimitedAccess policy. The CreateUser event surfaces in
+    CloudTrail but the console UX does not warn the operator that an IAM
+    artifact was created, so phantom users accumulate quickly in
+    accounts that test the platform.
+references:
+    - https://github.com/BeyondTrust/bedrock-keys-security
+author: BeyondTrust Phantom Labs
+date: 2026/05/20
+tags:
+    - attack.persistence
+    - attack.t1136.003
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    selection:
+        eventSource: iam.amazonaws.com
+        eventName: CreateUser
+        requestParameters.userName|startswith: 'AeaApiKey-'
+    condition: selection
+falsepositives:
+    - Legitimate developer onboarding to Claude Platform on AWS when API keys
+      are sanctioned. Pair with allowlist of expected principals that perform
+      key creation (typically the workspace admin or a delegated automation).
+level: medium

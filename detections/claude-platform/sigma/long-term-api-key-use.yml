@@ -1,0 +1,29 @@
+title: Claude Platform Long-Term API Key Use (Static-Credential Path)
+id: 36d10c8c-ec9d-4b1c-9bbb-2cef34a9b7d3
+status: stable
+description: |
+    Detects use of the long-term (AEAA) Claude Platform API key specifically,
+    via the requestParameters.bearerTokenType = LONG_TERM signal. Long-term
+    API keys are static and survive across sessions; their use outside known
+    automation is a leaked-key indicator.
+references:
+    - https://github.com/BeyondTrust/bedrock-keys-security
+author: BeyondTrust Phantom Labs
+date: 2026/05/20
+tags:
+    - attack.credential_access
+    - attack.t1078.004
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    selection:
+        eventSource: aws-external-anthropic.amazonaws.com
+        requestParameters.callWithBearerToken: true
+        requestParameters.bearerTokenType: LONG_TERM
+    condition: selection
+falsepositives:
+    - CI systems or jobs that intentionally hold a long-term API key.
+      Allowlist the principal, source IP and user agent of the expected
+      job; alert on everything else.
+level: medium

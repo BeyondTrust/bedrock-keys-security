@@ -2,9 +2,15 @@
 
 Runs from a delegated-admin or management account, calls
 organizations:ListAccounts to enumerate members, AssumeRoles into each
-ACTIVE account using a shared role name, then runs the existing
-PhantomUserScanner per account in parallel. Results are merged into a
+ACTIVE account using a shared role name, then runs a configurable
+phantom-user scanner per account in parallel. Results are merged into a
 single aggregate report.
+
+The scanner class is configurable: pass ``scanner_class=PhantomUserScanner``
+for the Bedrock surface (default) or
+``scanner_class=ClaudePlatformPhantomScanner`` for the Claude Platform
+surface. The per-account flow is identical; only the scanner class and
+the per-service credential field names differ.
 
 Per-account failures (AssumeRole denied, IAM throttled, etc.) are
 captured per-account and do not abort the scan; the failing account is
@@ -16,14 +22,16 @@ import json
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Type
 
 from botocore.exceptions import BotoCoreError, ClientError
 from tabulate import tabulate
 
-from bedrock_keys_security.core.scanner import PhantomUserScanner, _csv_safe, _json_default
+from bedrock_keys_security.core.scanner import PhantomUserScanner
+from bedrock_keys_security.core.scanner_base import BasePhantomScanner
 from bedrock_keys_security.utils import output
 from bedrock_keys_security.utils.aws import AWSSession
+from bedrock_keys_security.utils.csv_helpers import csv_safe as _csv_safe, json_default as _json_default
 
 
 DEFAULT_ORG_ROLE = "OrganizationAccountAccessRole"
@@ -60,7 +68,14 @@ def _summarize(phantoms: List[Dict]) -> Dict[str, int]:
 
 
 class OrgScanner:
-    """Scan every active account in an AWS Organization for phantom Bedrock users."""
+    """Scan every active account in an AWS Organization for phantom users.
+
+    ``scanner_class`` chooses which surface to enumerate. Default is
+    :class:`PhantomUserScanner` (Bedrock); pass
+    :class:`ClaudePlatformPhantomScanner` to scan the Claude Platform
+    surface instead. The control flow is shared; only the per-account
+    scanner instance differs.
+    """
 
     def __init__(
         self,
@@ -68,11 +83,13 @@ class OrgScanner:
         role_name: str = DEFAULT_ORG_ROLE,
         verbose: bool = False,
         max_workers: int = ORG_MAX_WORKERS,
+        scanner_class: Type[BasePhantomScanner] = PhantomUserScanner,
     ):
         self.base = base_session
         self.role_name = role_name
         self.verbose = verbose
         self.max_workers = max_workers
+        self.scanner_class = scanner_class
         self.organizations = base_session.session.client(
             "organizations", region_name=base_session.region
         )
@@ -141,7 +158,7 @@ class OrgScanner:
             else:
                 target = self._assume_role(account_id)
 
-            scanner = PhantomUserScanner(aws_session=target, verbose=False)
+            scanner = self.scanner_class(aws_session=target, verbose=False)
             phantoms = scanner.find_phantom_users()
         except OrgScanError as e:
             record["status"] = "error"
@@ -223,6 +240,7 @@ class OrgScanner:
     def _metadata(self, total: int, ok: int, failed: int) -> Dict:
         return {
             "mode": "org",
+            "service": self.scanner_class.SERVICE_LABEL.lower().replace(" ", "-"),
             "management_account_id": self.base.account_id,
             "scan_time": datetime.now(timezone.utc).isoformat(),
             "caller_arn": self.base.caller_arn,
@@ -233,15 +251,24 @@ class OrgScanner:
         }
 
 
-def format_org_table_report(result: Dict) -> str:
-    """Render the org scan as a per-account table block + aggregate footer."""
+def format_org_table_report(
+    result: Dict,
+    scanner_class: Type[BasePhantomScanner] = PhantomUserScanner,
+) -> str:
+    """Render the org scan as a per-account table block + aggregate footer.
+
+    The credential column reads from ``scanner_class.ACTIVE_CREDENTIAL_COUNT_KEY``
+    so the same renderer works for Bedrock and Claude Platform results.
+    """
     lines: List[str] = []
     meta = result["scan_metadata"]
     summary = result["summary"]
     accounts = result["accounts"]
+    active_credential_field = scanner_class.ACTIVE_CREDENTIAL_COUNT_KEY
 
+    service_label = scanner_class.SERVICE_LABEL
     header = (
-        f"{output.bold(output.cyan('Org scan'))}: "
+        f"{output.bold(output.cyan(f'Org scan ({service_label})'))}: "
         f"{meta['accounts_total']} accounts "
         f"({output.green(str(meta['accounts_scanned'])+' ok')}, "
         f"{output.red(str(meta['accounts_failed'])+' failed') if meta['accounts_failed'] else '0 failed'})  "
@@ -283,7 +310,7 @@ def format_org_table_report(result: Dict) -> str:
                 table.append([
                     u["username"],
                     u["created"].strftime("%Y-%m-%d") if hasattr(u["created"], "strftime") else u["created"],
-                    u["active_bedrock_credentials"],
+                    u.get(active_credential_field, 0),
                     u["active_access_keys"],
                     output.style_status(u["status"]),
                 ])
@@ -300,7 +327,7 @@ def format_org_table_report(result: Dict) -> str:
     lines.append(f"  Accounts scanned:  {output.cyan(str(meta['accounts_scanned']))}/{meta['accounts_total']}")
     if meta["accounts_failed"]:
         lines.append(f"  Accounts failed:   {output.red(str(meta['accounts_failed']))}")
-    lines.append(f"  Total phantoms:    {output.cyan(str(summary['total']))}")
+    lines.append(f"  Total phantom users: {output.cyan(str(summary['total']))}")
     lines.append(f"  At Risk:           {output.red(str(summary['at_risk']))}")
     lines.append(f"  Active:            {output.green(str(summary['active']))}")
     lines.append(f"  Orphaned:          {output.yellow(str(summary['orphaned']))}")
@@ -334,13 +361,24 @@ def org_csv_rows(result: Dict) -> List[Dict]:
     return rows
 
 
-_ORG_CSV_FIELDS = [
+_BASE_CSV_FIELDS = [
     'account_id', 'account_name',
     'username', 'user_id', 'created', 'status',
-    'active_bedrock_credentials', 'bedrock_credentials',
     'active_access_keys', 'access_keys',
     'access_key_ids', 'attached_policies', 'inline_policies',
 ]
+
+
+def _csv_fields_for(scanner_class: Type[BasePhantomScanner]) -> List[str]:
+    """Splice the per-service credential count fields into the base CSV schema."""
+    fields = list(_BASE_CSV_FIELDS)
+    # Insert the credential count columns right after `status` for readability.
+    status_idx = fields.index('status') + 1
+    return (
+        fields[:status_idx]
+        + [scanner_class.ACTIVE_CREDENTIAL_COUNT_KEY, scanner_class.CREDENTIAL_COUNT_KEY]
+        + fields[status_idx:]
+    )
 
 
 def org_json_report(result: Dict) -> str:
@@ -348,11 +386,16 @@ def org_json_report(result: Dict) -> str:
     return json.dumps(result, indent=2, default=_json_default)
 
 
-def org_csv_report(result: Dict, output_file: str) -> None:
+def org_csv_report(
+    result: Dict,
+    output_file: str,
+    scanner_class: Type[BasePhantomScanner] = PhantomUserScanner,
+) -> None:
     """Flatten the org result to one row per phantom user and write CSV to output_file."""
     rows = org_csv_rows(result)
+    fields = _csv_fields_for(scanner_class)
     with open(output_file, 'w', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=_ORG_CSV_FIELDS, extrasaction='ignore')
+        writer = csv.DictWriter(f, fieldnames=fields, extrasaction='ignore')
         writer.writeheader()
         for row in rows:
             row = dict(row)

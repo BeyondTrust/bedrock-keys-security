@@ -1,6 +1,6 @@
-title: Bedrock API Key Data-Plane Bearer Call (correlation base)
+title: Bedrock API Key Data-Plane Call (correlation base)
 id: a344e18c-c8b6-4595-97c1-0dd88e1d13d4
-name: bedrock_bearer_data_plane_call
+name: bedrock_api_key_data_plane_call
 status: stable
 description: |
     Base rule for the cross-region correlation. Matches any
@@ -27,13 +27,13 @@ detection:
     condition: selection
 level: informational
 ---
-title: Bedrock Bearer Token Used Across Multiple Regions
+title: Bedrock API key Used Across Multiple Regions
 id: eb006603-5e96-427b-9d03-e6442f203308
 status: experimental
 description: |
-    Detects the same Bedrock bearer principal issuing data-plane calls
+    Detects the same Bedrock API key principal issuing data-plane calls
     across two or more AWS regions within 30 minutes. Canonical LLMjacking
-    fan-out pattern: stolen keys spun up across regions to maximize
+    pattern: stolen keys spun up across regions to maximize
     foundation-model throughput. Aggregates by userIdentity.principalId so
     both long-term keys (phantom users) and short-term keys (STS-derived,
     no BedrockAPIKey-* userName) are caught.
@@ -47,7 +47,7 @@ tags:
 correlation:
     type: value_count
     rules:
-        - bedrock_bearer_data_plane_call
+        - bedrock_api_key_data_plane_call
     group-by:
         - userIdentity.principalId
     timespan: 30m

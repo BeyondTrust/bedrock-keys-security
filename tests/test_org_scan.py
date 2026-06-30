@@ -487,6 +487,102 @@ class TestFormatters:
         assert "AmazonBedrockLimitedAccess" in content
 
 
+class TestClaudePlatformOrgScan:
+    """Validates the scanner_class parameter routes the org scan to Claude Platform."""
+
+    def test_claude_platform_scanner_finds_aea_phantoms(self, patched_from_credentials):
+        from bedrock_keys_security.core.scanner_claude_platform import (
+            ClaudePlatformPhantomScanner,
+            MANAGED_POLICY_ARN,
+        )
+
+        base = _BaseStubSession(account_id="111111111111")
+        base.organizations.get_paginator.return_value = _list_accounts_response([
+            {"id": "111111111111", "name": "mgmt"},
+            {"id": "222222222222", "name": "prod"},
+        ])
+        _empty_iam(base.iam)
+        base.iam.get_paginator.return_value = _list_users_paginator([
+            {
+                "UserName": "AeaApiKey-mgmt1",
+                "UserId": "AIDMGMT",
+                "Arn": "arn:aws:iam::111111111111:user/AeaApiKey-mgmt1",
+                "CreateDate": datetime(2026, 5, 11, tzinfo=timezone.utc),
+                "Path": "/",
+            },
+            # A BedrockAPIKey-* user must be ignored by the Claude Platform scanner.
+            {
+                "UserName": "BedrockAPIKey-noisy",
+                "UserId": "AIDNOISY",
+                "Arn": "arn:aws:iam::111111111111:user/BedrockAPIKey-noisy",
+                "CreateDate": datetime(2026, 5, 11, tzinfo=timezone.utc),
+                "Path": "/",
+            },
+        ])
+
+        member = _BaseStubSession(account_id="222222222222")
+        _empty_iam(member.iam)
+        member.iam.list_service_specific_credentials.return_value = {
+            "ServiceSpecificCredentials": [
+                {
+                    "UserName": "AeaApiKey-prod1",
+                    "Status": "Active",
+                    "ServiceCredentialAlias": "AeaApiKey-prod1-at-222222222222",
+                    "CreateDate": datetime(2026, 5, 11, tzinfo=timezone.utc),
+                    "ExpirationDate": datetime(2027, 5, 11, tzinfo=timezone.utc),
+                    "ServiceSpecificCredentialId": "ACCAEXAMPLE",
+                    "ServiceName": "aws-external-anthropic.amazonaws.com",
+                }
+            ]
+        }
+        member.iam.list_attached_user_policies.return_value = {
+            "AttachedPolicies": [
+                {"PolicyName": "AnthropicLimitedAccess", "PolicyArn": MANAGED_POLICY_ARN}
+            ]
+        }
+        member.iam.get_paginator.return_value = _list_users_paginator([
+            {
+                "UserName": "AeaApiKey-prod1",
+                "UserId": "AIDPROD",
+                "Arn": "arn:aws:iam::222222222222:user/AeaApiKey-prod1",
+                "CreateDate": datetime(2026, 5, 11, tzinfo=timezone.utc),
+                "Path": "/",
+            },
+        ])
+        patched_from_credentials["222222222222"] = member
+
+        base.sts.assume_role.return_value = {
+            "Credentials": {
+                "AccessKeyId": "ASIA",
+                "SecretAccessKey": "x",
+                "SessionToken": "t",
+                "Expiration": datetime(2099, 1, 1, tzinfo=timezone.utc),
+            },
+            "AssumedRoleUser": {
+                "Arn": "arn:aws:sts::222222222222:assumed-role/OrganizationAccountAccessRole/bks",
+                "AssumedRoleId": "AROA:bks",
+            },
+        }
+
+        scanner = OrgScanner(base_session=base, scanner_class=ClaudePlatformPhantomScanner)
+        result = scanner.scan_all()
+
+        assert result["scan_metadata"]["mode"] == "org"
+        assert result["scan_metadata"]["service"] == "claude-platform"
+        assert result["scan_metadata"]["accounts_scanned"] == 2
+
+        accounts_by_id = {a["account_id"]: a for a in result["accounts"]}
+        # mgmt account has the AeaApiKey- user but no SSC and no policy → ORPHANED.
+        # The BedrockAPIKey-noisy user must be filtered out.
+        assert [u["username"] for u in accounts_by_id["111111111111"]["phantom_users"]] == ["AeaApiKey-mgmt1"]
+        # member account has the SSC + policy → ACTIVE.
+        prod = accounts_by_id["222222222222"]["phantom_users"]
+        assert prod[0]["username"] == "AeaApiKey-prod1"
+        assert prod[0]["status"] == "ACTIVE"
+        assert prod[0]["active_claude_platform_credentials"] == 1
+        assert prod[0]["has_anthropic_policy"] is True
+
+
 class TestCliWiring:
     def test_org_role_without_org_flag_errors(self, monkeypatch):
         # Avoid building an AWSSession (which would call STS) by short-circuiting Context.scanner.

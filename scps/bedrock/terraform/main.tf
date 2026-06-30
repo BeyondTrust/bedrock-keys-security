@@ -1,6 +1,6 @@
 # Policies are inlined (not loaded from ../*.json) so the module is
 # self-contained as a remote source. Keep bodies below in sync with the
-# four JSON files in this module's parent directory.
+# JSON files in this module's parent directory (scps/bedrock/).
 
 locals {
   scps = {
@@ -25,6 +25,34 @@ locals {
             Effect   = "Deny"
             Action   = "bedrock:CallWithBearerToken"
             Resource = "*"
+          },
+        ]
+      })
+    }
+
+    block_phantom_user_creation = {
+      enabled     = var.enable_block_phantom_user_creation
+      name        = "Block-Bedrock-Phantom-User-Creation"
+      description = "Deny iam:CreateUser matching BedrockAPIKey-* and deny attaching AmazonBedrockLimitedAccess to any principal."
+      policy = jsonencode({
+        Version = "2012-10-17"
+        Statement = [
+          {
+            Sid      = "BlockBedrockPhantomUserCreation"
+            Effect   = "Deny"
+            Action   = "iam:CreateUser"
+            Resource = "arn:aws:iam::*:user/BedrockAPIKey-*"
+          },
+          {
+            Sid      = "BlockAmazonBedrockLimitedAccessAttachment"
+            Effect   = "Deny"
+            Action   = ["iam:AttachUserPolicy", "iam:AttachRolePolicy", "iam:AttachGroupPolicy"]
+            Resource = "*"
+            Condition = {
+              ArnEquals = {
+                "iam:PolicyARN" = "arn:aws:iam::aws:policy/AmazonBedrockLimitedAccess"
+              }
+            }
           },
         ]
       })
@@ -58,7 +86,7 @@ locals {
     block_long_term_only = {
       enabled     = var.enable_block_long_term_only
       name        = "Block-Long-Term-Bedrock-Keys"
-      description = "Deny long-term (ABSK) bearer tokens; allow short-term."
+      description = "Deny long-term (ABSK) API keys; allow short-term."
       policy = jsonencode({
         Version = "2012-10-17"
         Statement = [

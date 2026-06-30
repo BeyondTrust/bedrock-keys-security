@@ -1,0 +1,19 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyUnauthorizedAccessToProtectedWorkspace",
+      "Effect": "Deny",
+      "Action": "aws-external-anthropic:*",
+      "Resource": "arn:aws:aws-external-anthropic:*:*:workspace/REPLACE_WITH_WORKSPACE_ID",
+      "Condition": {
+        "ArnNotLike": {
+          "aws:PrincipalArn": [
+            "arn:aws:iam::*:role/REPLACE_WITH_PERMITTED_ROLE",
+            "arn:aws:iam::*:user/REPLACE_WITH_PERMITTED_USER"
+          ]
+        }
+      }
+    }
+  ]
+}

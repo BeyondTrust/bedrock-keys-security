@@ -4,15 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bedrock-keys-security"
-version = "1.2.1"
-description = "The AWS Bedrock API keys security toolkit: offline decoder, phantom user discovery, incident response, cleanup, preventive SCPs and detection content."
+version = "1.3.0"
+description = "AWS Bedrock and Claude Platform on AWS API keys security toolkit: offline decoder, phantom user discovery, incident response, cleanup, preventive SCPs and detection content."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
 authors = [
     { name = "Sergio Garcia (MrCloudSec)", email = "hello@mistercloudsec.com" },
 ]
-keywords = ["aws", "bedrock", "security", "iam", "api-keys", "incident-response", "ai"]
+keywords = ["aws", "bedrock", "claude", "anthropic", "security", "iam", "api-keys", "incident-response", "ai"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",

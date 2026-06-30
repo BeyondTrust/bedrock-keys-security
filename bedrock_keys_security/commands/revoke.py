@@ -6,12 +6,16 @@ import click
 
 from bedrock_keys_security.commands.scan import build_output_path, write_secure
 from bedrock_keys_security.core.decoder import BedrockKeyDecoder
+from bedrock_keys_security.core.decoder_claude_platform import (
+    ClaudePlatformKeyDecoder,
+)
 from bedrock_keys_security.utils.cli import (
     apply_aws_overrides,
     apply_quiet_override,
     aws_options,
     quiet_option,
     resolve_username,
+    select_scanner,
 )
 
 
@@ -25,26 +29,24 @@ from bedrock_keys_security.utils.cli import (
 @quiet_option
 @click.pass_context
 def revoke_key(ctx, profile, region, username_or_key, dry_run, force, output_json, quiet_flag):
-    """Emergency revocation of Bedrock API key.
+    """Emergency revocation of a Bedrock or Claude Platform API key.
 
-    Accepts:
-    - A phantom IAM username (BedrockAPIKey-xxxx): runs the long-term flow
-      (deny policy + delete SSCs + disable AKIAs).
-    - A long-term ABSK key string: decoded offline to its phantom username,
-      then the same long-term flow.
-    - A short-term bedrock-api-key-* string: decodes the embedded STS access
-      key, finds the issuing principal in CloudTrail, applies an
-      aws:TokenIssueTime deny on that principal.
+    Accepts a phantom IAM username, a long-term key or a short-term key.
+    A username or long-term key revokes the phantom user's keys; short-term
+    keys are traced through CloudTrail to deny the principal that used them.
     """
     apply_aws_overrides(ctx, profile, region)
     apply_quiet_override(ctx, quiet_flag)
 
-    scanner = ctx.obj.scanner
-
     if username_or_key.startswith(BedrockKeyDecoder.SHORT_TERM_PREFIX):
+        scanner = ctx.obj.scanner
+        result = scanner.revoke_short_term_key(username_or_key, dry_run=dry_run, force=force)
+    elif username_or_key.startswith(ClaudePlatformKeyDecoder.SHORT_TERM_PREFIX):
+        scanner = ctx.obj.claude_platform_scanner
         result = scanner.revoke_short_term_key(username_or_key, dry_run=dry_run, force=force)
     else:
         username = resolve_username(username_or_key)
+        scanner = select_scanner(ctx, username)
         result = scanner.revoke_key(username, dry_run=dry_run, force=force)
 
     if output_json:

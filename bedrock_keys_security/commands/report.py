@@ -10,6 +10,7 @@ from bedrock_keys_security.utils.cli import (
     aws_options,
     quiet_option,
     resolve_username,
+    select_scanner,
 )
 
 
@@ -23,15 +24,16 @@ from bedrock_keys_security.utils.cli import (
 @quiet_option
 @click.pass_context
 def report(ctx, profile, region, username_or_key, output_file, output_json, quiet_flag):
-    """Generate incident report for phantom user.
+    """Generate incident report for phantom user or API key.
 
-    Accepts either a phantom IAM username (BedrockAPIKey-xxxx) or a
-    long-term ABSK key string.
+    Accepts either a phantom IAM username or a long-term API key string.
+    Supported username prefixes: ``BedrockAPIKey-*`` and ``AeaApiKey-*``.
+    Supported key prefixes: ``ABSK`` and ``AEAA``.
     """
     apply_aws_overrides(ctx, profile, region)
     apply_quiet_override(ctx, quiet_flag)
     username = resolve_username(username_or_key)
-    scanner = ctx.obj.scanner
+    scanner = select_scanner(ctx, username)
 
     if output_json:
         data = scanner.collect_incident_data(username)
@@ -39,6 +41,6 @@ def report(ctx, profile, region, username_or_key, output_file, output_json, quie
         write_secure(path, json.dumps(data, indent=2, default=str))
         click.echo(f"JSON saved: {path}")
         if output_file:
-            scanner.generate_incident_report(username, output_file=output_file)
+            scanner.generate_incident_report(username, output_file=output_file, data=data)
     else:
         scanner.generate_incident_report(username, output_file=output_file)

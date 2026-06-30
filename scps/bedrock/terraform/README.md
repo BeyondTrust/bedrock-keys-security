@@ -1,19 +1,20 @@
 # Terraform: Bedrock API key SCPs
 
-Terraform module that mirrors the four JSON SCPs in `scps/` as
+Terraform module that mirrors the JSON SCPs in `scps/bedrock/` as
 `aws_organizations_policy` resources, ready to attach to OUs.
 
 ## Usage
 
 ```hcl
 module "bedrock_scps" {
-  source = "./scps/terraform"
+  source = "./scps/bedrock/terraform"
 
-  # Pick which SCPs to create. Defaults: only "block_all_keys".
+  # Pick which SCPs to create. Defaults: only "block_all_keys" and "block_phantom_access_keys".
   enable_block_all_keys              = true
-  enable_enforce_90day_max           = false
+  enable_block_phantom_user_creation = false
   enable_block_long_term_only        = false
   enable_block_phantom_access_keys   = true
+  enable_enforce_90day_max           = false
 
   # Optional: attach to OUs immediately.
   target_ou_ids = ["ou-xxxx-aaaaaaaa", "ou-xxxx-bbbbbbbb"]
@@ -31,8 +32,8 @@ module "bedrock_scps" {
 
 | Name | Description |
 |---|---|
-| `policy_ids` | Map of SCP name → policy ID (only for enabled SCPs). |
-| `policy_arns` | Map of SCP name → policy ARN. |
+| `policy_ids` | Map of SCP name to policy ID (only for enabled SCPs). |
+| `policy_arns` | Map of SCP name to policy ARN. |
 
 ## Test on a non-prod OU first
 

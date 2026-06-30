@@ -1,0 +1,35 @@
+title: Claude Platform on AWS Long-Term API Key Created
+id: e5f15f16-3f9c-40ed-999c-4229ec0fcea6
+status: stable
+description: |
+    Detects creation of a Claude Platform service-specific credential (a
+    long-term AEAA API key). Console-triggered creates emit a silent
+    three-event sequence (CreateUser, AttachUserPolicy,
+    CreateServiceSpecificCredential) that provisions an AeaApiKey-<id>
+    phantom IAM user with AnthropicLimitedAccess. CLI/SDK creates on an
+    existing user emit only this event; secondary keys on the same phantom
+    (the +1 pattern) are also captured. These creates are logged as management
+    events (eventCategory=Management), so they ship to every trail by default.
+references:
+    - https://docs.aws.amazon.com/claude-platform/latest/userguide/api-keys.html
+    - https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AnthropicLimitedAccess.html
+    - https://github.com/BeyondTrust/bedrock-keys-security
+author: BeyondTrust Phantom Labs
+date: 2026/05/29
+tags:
+    - attack.credential_access
+    - attack.t1098.001
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    selection:
+        eventSource: iam.amazonaws.com
+        eventName: CreateServiceSpecificCredential
+        requestParameters.serviceName: aws-external-anthropic.amazonaws.com
+    condition: selection
+falsepositives:
+    - Legitimate developer onboarding to Claude Platform on AWS when API
+      keys are sanctioned. Pair with allowlist of expected principals
+      (CI roles, dev IAM users).
+level: medium

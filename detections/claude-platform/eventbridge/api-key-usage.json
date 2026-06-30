@@ -1,0 +1,10 @@
+{
+  "source": ["aws.aws-external-anthropic"],
+  "detail-type": ["AWS API Call via CloudTrail"],
+  "detail": {
+    "eventSource": ["aws-external-anthropic.amazonaws.com"],
+    "requestParameters": {
+      "callWithBearerToken": [true]
+    }
+  }
+}

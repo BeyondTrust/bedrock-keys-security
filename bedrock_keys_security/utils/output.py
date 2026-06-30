@@ -151,13 +151,27 @@ def format_decode_table_output(result: Dict) -> str:
     if "error" in result:
         return f"\n{red('[ERROR] ' + result['error'])}\n"
 
+    bks_service = result.get("bks_service", "bedrock")
+    is_claude_platform = bks_service == "claude-platform"
+
     lines = []
     lines.append(f"\n{bold('─' * 60)}")
-    lines.append(f"{bold(cyan('  Bedrock API Key Analysis'))}")
+    header = (
+        "  Claude Platform API Key Analysis"
+        if is_claude_platform
+        else "  Bedrock API Key Analysis"
+    )
+    lines.append(f"{bold(cyan(header))}")
     lines.append(f"{bold('─' * 60)}")
 
     key_type = result.get("type", "Unknown")
-    type_label = green("Long-term (ABSK)") if key_type == "long-term" else yellow("Short-term")
+    if key_type == "long-term":
+        prefix_label = "AEAA" if is_claude_platform else "ABSK"
+        type_label = green(f"Long-term ({prefix_label})")
+    elif key_type == "short-term":
+        type_label = yellow("Short-term")
+    else:
+        type_label = "Unknown"
     lines.append(f"  Type: {type_label}")
 
     if key_type == "long-term":
@@ -180,7 +194,7 @@ def format_decode_table_output(result: Dict) -> str:
         lines.append(f"  Action:          {result.get('action', 'N/A')}")
         lines.append(f"  API Version:     {result.get('api_version', 'N/A')}")
         lines.append(f"  Access Key ID:   {cyan(result.get('access_key_id', 'N/A'))} (ASIA* = STS temporary)")
-        lines.append(f"  Service:         {result.get('service', 'N/A')}")
+        lines.append(f"  Service:         {result.get('sigv4_service', 'N/A')}")
         lines.append(f"  Region:          {cyan(result.get('region', 'N/A'))}")
         lines.append(f"  AWS Account ID:  {cyan(result.get('account_id', 'N/A'))}")
         lines.append(f"  Issued At:       {result.get('issued_at', 'N/A')}")

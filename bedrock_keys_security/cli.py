@@ -10,6 +10,9 @@ from bedrock_keys_security._version import get_commit
 from bedrock_keys_security.utils import output
 from bedrock_keys_security.utils.aws import AWSSession
 from bedrock_keys_security.core.scanner import PhantomUserScanner
+from bedrock_keys_security.core.scanner_claude_platform import (
+    ClaudePlatformPhantomScanner,
+)
 
 _commit = get_commit()
 _version_string = f"{__version__} (commit {_commit})" if _commit else __version__
@@ -24,15 +27,35 @@ class Context:
         self.verbose: bool = False
         self.quiet: bool = False
         self.output_dir: Path = Path("output")
+        self._aws_session: Optional[AWSSession] = None
         self._scanner: Optional[PhantomUserScanner] = None
+        self._claude_platform_scanner: Optional[ClaudePlatformPhantomScanner] = None
+
+    def _ensure_aws_session(self) -> AWSSession:
+        """Build the shared AWSSession once across scanners to avoid double GetCallerIdentity."""
+        if self._aws_session is None:
+            self._aws_session = AWSSession(
+                profile=self.profile, region=self.region, verbose=self.verbose
+            )
+        return self._aws_session
 
     @property
     def scanner(self) -> PhantomUserScanner:
-        """Lazy-initialize PhantomUserScanner (avoids AWS calls for decode-key)"""
+        """Lazy-initialize the Bedrock phantom user scanner."""
         if self._scanner is None:
-            aws = AWSSession(profile=self.profile, region=self.region, verbose=self.verbose)
-            self._scanner = PhantomUserScanner(aws_session=aws, verbose=self.verbose)
+            self._scanner = PhantomUserScanner(
+                aws_session=self._ensure_aws_session(), verbose=self.verbose
+            )
         return self._scanner
+
+    @property
+    def claude_platform_scanner(self) -> ClaudePlatformPhantomScanner:
+        """Lazy-initialize the Claude Platform phantom user scanner."""
+        if self._claude_platform_scanner is None:
+            self._claude_platform_scanner = ClaudePlatformPhantomScanner(
+                aws_session=self._ensure_aws_session(), verbose=self.verbose
+            )
+        return self._claude_platform_scanner
 
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
@@ -44,10 +67,10 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 @click.option('--verbose', '-v', is_flag=True, help='Enable verbose output')
 @click.option('--quiet', '-q', is_flag=True,
               help='Suppress info / success / warning logs and the scan banner / table / summary. '
-                   'Errors still go to stderr; saved-file paths still print to stdout. Useful for SOAR pipelines.')
+                   'Errors still go to stderr; saved-file paths still print to stdout.')
 @click.option('--output-dir', 'output_dir', default='output', metavar='DIR',
               help='Directory for JSON / CSV reports (default: ./output). '
-                   'Created if missing. Useful for SOAR pipelines that store reports under /var/log/bks or similar.')
+                   'Created if missing.')
 @click.version_option(_version_string, prog_name='bks')
 @click.pass_context
 def cli(ctx, profile, region, verbose, quiet, output_dir):
@@ -57,8 +80,6 @@ def cli(ctx, profile, region, verbose, quiet, output_dir):
     scanner (BedrockAPIKey-* IAM users silently provisioned by Console
     long-term keys), an offline key decoder for ABSK and short-term keys,
     incident response commands and a report generator.
-
-    Subcommands: scan, decode-key, timeline, revoke-key, report, cleanup.
     """
     ctx.ensure_object(Context)
     ctx.obj.profile = profile

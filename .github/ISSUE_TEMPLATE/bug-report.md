@@ -12,12 +12,12 @@ One-line summary of the bug:
 - [ ] CLI command (`bks scan` / `bks cleanup` / `bks revoke-key` / `bks timeline` / `bks report` / `bks decode-key`)
 - [ ] Library import (`from bedrock_keys_security import ...`)
 - [ ] Detection content (Sigma / EventBridge / CloudTrail Lake / Athena / CloudWatch Insights)
-- [ ] SCP template (`scps/*.json`)
-- [ ] IaC module (`scps/terraform/` or `scps/cloudformation/`)
+- [ ] SCP template (`scps/bedrock/*.json` or `scps/claude-platform/*.json`)
+- [ ] IaC module (`scps/bedrock/terraform/`, `scps/bedrock/cloudformation/`, `scps/claude-platform/terraform/` or `scps/claude-platform/cloudformation/`)
 - [ ] Documentation
 - [ ] Other:
 
-**Specific file or command**: e.g. `bks scan`, `detections/sigma/bedrock-bearer-token-usage.yml`, `scps/1-block-all-keys.json`
+**Specific file or command**: e.g. `bks scan`, `detections/bedrock/sigma/api-key-usage.yml`, `scps/bedrock/1-block-all-keys.json`
 
 ## Steps to Reproduce
 Minimal reproducible steps. Include the exact command, query, or deployment:

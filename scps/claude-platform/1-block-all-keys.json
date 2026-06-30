@@ -1,0 +1,45 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "BlockClaudePlatformCredentialCreation",
+      "Effect": "Deny",
+      "Action": "iam:CreateServiceSpecificCredential",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "iam:ServiceSpecificCredentialServiceName": "aws-external-anthropic.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Sid": "BlockClaudePlatformApiKeyUse",
+      "Effect": "Deny",
+      "Action": "aws-external-anthropic:CallWithBearerToken",
+      "Resource": "*"
+    },
+    {
+      "Sid": "BlockClaudePlatformPhantomUserCreation",
+      "Effect": "Deny",
+      "Action": "iam:CreateUser",
+      "Resource": "arn:aws:iam::*:user/AeaApiKey-*"
+    },
+    {
+      "Sid": "BlockClaudePlatformWebIdentityToken",
+      "Effect": "Deny",
+      "Action": [
+        "sts:GetWebIdentityToken",
+        "sts:TagGetWebIdentityToken"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "ForAnyValue:StringEquals": {
+          "sts:IdentityTokenAudience": [
+            "https://api.anthropic.com",
+            "https://platform.claude.com"
+          ]
+        }
+      }
+    }
+  ]
+}
