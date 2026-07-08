@@ -47,9 +47,9 @@ bks revoke-key BedrockAPIKey-xxxx
 
 AWS Bedrock API keys behave unlike regular AWS credentials. They authenticate via bearer tokens instead of SigV4, and they embed the AWS account ID and IAM username in plain base64.
 
-The most damaging behavior: when a user creates a long-term Bedrock API key through the AWS Console, AWS silently provisions an IAM user named `BedrockAPIKey-xxxx` and attaches the [`AmazonBedrockLimitedAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonBedrockLimitedAccess.html) managed policy.
+The most damaging behavior: when a user creates a long-term Bedrock API key through the AWS Console, AWS **silently provisions an IAM user** named `BedrockAPIKey-xxxx` and attaches the [`AmazonBedrockLimitedAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonBedrockLimitedAccess.html) managed policy.
 
-Despite its name, the policy is effectively administrative: 48 actions across `bedrock:*` (44) and `bedrock-mantle:*` (4) covering create / read / update / delete across all Bedrock resources, plus cross-service reconnaissance (`iam:ListRoles`, `kms:DescribeKey`, `ec2:Describe{Vpcs,Subnets,SecurityGroups}`). Full action list in the AWS doc linked above.
+Despite its name, the policy is **effectively administrative**. As of July 2026 (version v8) it grants 48 actions across `bedrock:*` (44) and `bedrock-mantle:*` (4) covering create / read / update / delete across all Bedrock resources, plus cross-service reconnaissance (`iam:ListRoles`, `kms:DescribeKey`, `ec2:Describe{Vpcs,Subnets,SecurityGroups}`).
 
 These phantom users are never automatically cleaned up. They accumulate over time, creating an expanding attack surface that most organizations don't know exists. The same trap applies to Claude Platform on AWS keys, whose phantom users carry the workspace-scoped [`AnthropicLimitedAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AnthropicLimitedAccess.html) policy, which keeps their blast radius tighter than Bedrock's, as the next section explains.
 
@@ -57,11 +57,15 @@ These phantom users are never automatically cleaned up. They accumulate over tim
 
 ![Attack Paths Diagram](https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/attack-paths.jpeg)
 
-**LLMjacking:** An attacker who obtains a leaked key, Bedrock or Claude Platform, can spin up workers across AWS regions to burn foundation-model capacity on your account. Worst-case exposure depends on the service quota and the model price; for Claude Opus 4.8 at list pricing (2026), this works out to roughly $18,000/day per region.
+**LLMjacking:** An attacker who obtains a leaked key, Bedrock or Claude Platform, can spin up workers across AWS regions to burn foundation-model capacity on your account. Worst-case exposure depends on the service quota and the model price; for Claude Opus 4.8 at list pricing (2026), this works out to **roughly $18,000/day per region**.
 
 ![LLMjacking Attack Flow](https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/llm-jacking.jpeg)
 
-**Privilege Escalation:** A Bedrock API key is a bearer token, so it only reaches `bedrock:*`. The IAM, KMS and EC2 reconnaissance that `AmazonBedrockLimitedAccess` also grants (`iam:ListRoles`, `kms:DescribeKey`, `ec2:Describe*`) is unreachable with a bearer token, since those actions require SigV4-signed requests. Creating an IAM access key on the phantom user unlocks exactly that gap: standard long-term credentials that exercise the full policy, map roles, keys and network for lateral movement, and keep working after the Bedrock API key is rotated or revoked. **This pivot is Bedrock-specific:** on Claude Platform, `AnthropicLimitedAccess` is workspace-scoped, so an access key on a Claude Platform phantom user reaches nothing beyond the key's own surface, no escalation. That is why `bks scan` flags Bedrock phantoms holding access keys as `AT RISK` but Claude Platform ones only `ACTIVE`.
+**Privilege Escalation:** A Bedrock API key is a bearer token, so it only reaches `bedrock:*` and `bedrock-mantle:*`. The IAM, KMS and EC2 reconnaissance that [`AmazonBedrockLimitedAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonBedrockLimitedAccess.html) also grants (`iam:ListRoles`, `kms:DescribeKey`, `ec2:Describe*`) is unreachable with a bearer token, since those actions require SigV4-signed requests.
+
+Creating an IAM access key on the phantom user unlocks exactly that gap: standard long-term credentials that exercise the full policy, map roles, keys and network for lateral movement, and keep working after the Bedrock API key is rotated or revoked.
+
+**This pivot is Bedrock-specific:** on Claude Platform, [`AnthropicLimitedAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AnthropicLimitedAccess.html) is workspace-scoped, so an access key on a Claude Platform phantom user reaches nothing beyond the key's own surface, no escalation. That is why `bks scan` flags Bedrock phantoms holding access keys as `AT RISK` but Claude Platform ones only `ACTIVE`.
 
 > **Deep-dive:** [AWS Bedrock API Keys Security Guide, Part 1: Risks, Vulnerabilities and Attack Techniques](https://www.beyondtrust.com/blog/entry/aws-bedrock-security-api-keys) on the BeyondTrust Phantom Labs blog.
 
@@ -118,7 +122,7 @@ bks scan --org --org-skip 333333333333 --json               # exclude an account
 <img src="https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/scan-example.png" alt="Scan Example" width="600">
 
 Each phantom user is categorized by risk level:
-- **AT RISK:** Has an IAM access key, which leads to full access to the `AmazonBedrockLimitedAccess` policy (`bedrock:*` plus IAM/KMS/EC2 reconnaissance). Revoking the Bedrock key does not disable it. (`AT RISK` is a Bedrock-only status because `AnthropicLimitedAccess` grants no IAM/KMS/EC2 reconnaissance).
+- **AT RISK:** Has an IAM access key, which leads to full access to the [`AmazonBedrockLimitedAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonBedrockLimitedAccess.html) policy (`bedrock:*` plus IAM/KMS/EC2 reconnaissance). Revoking the Bedrock key does not disable it. (`AT RISK` is a Bedrock-only status because [`AnthropicLimitedAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AnthropicLimitedAccess.html) grants no IAM/KMS/EC2 reconnaissance).
 - **ACTIVE:** Has valid Bedrock API credentials
 - **ORPHANED:** No active credentials remaining (safe to delete)
 
@@ -223,7 +227,13 @@ Auto-detects the format and extracts the AWS account ID, plus the IAM username f
 
 ## Prevention with Service Control Policies (SCPs)
 
-Long-term API keys are static credentials that never expire on their own, and each one provisions a phantom IAM user, so every key left in place adds lasting risk. Service Control Policies (SCPs) address this preventively: applied at the org root or an organizational unit (OU), an SCP caps what every account can do, so a single policy can block API key creation and use entirely, restrict creation to short-term keys, or cap key lifetime across the whole organization.
+Long-term API keys are static credentials that never expire on their own, and each one provisions a phantom IAM user, so every key left in place adds lasting risk.
+
+Service Control Policies (SCPs) address this preventively: applied at the org root or an organizational unit (OU), an SCP caps what every account can do. A single policy can:
+
+- block API key creation and use entirely,
+- restrict creation to short-term keys, or
+- cap key lifetime across the whole organization.
 
 | # | Bedrock | Claude Platform | Purpose |
 |---|---|---|---|

@@ -67,7 +67,7 @@ class ClaudePlatformPhantomScanner(BasePhantomScanner):
     # AnthropicLimitedAccess conditions sts:GetWebIdentityToken on
     # aws:CalledViaLast = aws-external-anthropic.amazonaws.com, so the service
     # deny short-circuits it without needing a separate STS deny.
-    REVOKE_DENY_ACTION = "aws-external-anthropic:*"
+    REVOKE_DENY_ACTION = ["aws-external-anthropic:*"]
     REVOKE_DENY_SID = "DenyClaudePlatformUsage"
     # No AT RISK on this surface; AKIA on AeaApiKey-* is not an escalation pivot.
     _STATUS_PRIORITY = {'ACTIVE': 0, 'ORPHANED': 1}

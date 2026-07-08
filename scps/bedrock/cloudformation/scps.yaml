@@ -62,7 +62,9 @@ Resources:
               StringEquals:
                 iam:ServiceSpecificCredentialServiceName: bedrock.amazonaws.com
           - Effect: Deny
-            Action: bedrock:CallWithBearerToken
+            Action:
+              - bedrock:CallWithBearerToken
+              - bedrock-mantle:CallWithBearerToken
             Resource: '*'
 
   BlockBedrockPhantomUserCreation:
@@ -126,7 +128,13 @@ Resources:
             Resource: '*'
             Condition:
               StringEquals:
-                bedrock:BearerTokenType: LONG_TERM
+                bedrock:bearerTokenType: LONG_TERM
+          - Effect: Deny
+            Action: bedrock-mantle:CallWithBearerToken
+            Resource: '*'
+            Condition:
+              StringEquals:
+                bedrock-mantle:bearerTokenType: LONG_TERM
 
   BlockPhantomUserEscalation:
     Type: AWS::Organizations::Policy

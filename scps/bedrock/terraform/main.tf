@@ -23,7 +23,7 @@ locals {
           },
           {
             Effect   = "Deny"
-            Action   = "bedrock:CallWithBearerToken"
+            Action   = ["bedrock:CallWithBearerToken", "bedrock-mantle:CallWithBearerToken"]
             Resource = "*"
           },
         ]
@@ -96,7 +96,17 @@ locals {
             Resource = "*"
             Condition = {
               StringEquals = {
-                "bedrock:BearerTokenType" = "LONG_TERM"
+                "bedrock:bearerTokenType" = "LONG_TERM"
+              }
+            }
+          },
+          {
+            Effect   = "Deny"
+            Action   = "bedrock-mantle:CallWithBearerToken"
+            Resource = "*"
+            Condition = {
+              StringEquals = {
+                "bedrock-mantle:bearerTokenType" = "LONG_TERM"
               }
             }
           },
