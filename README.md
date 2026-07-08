@@ -61,7 +61,7 @@ These phantom users are never automatically cleaned up. They accumulate over tim
 
 ![LLMjacking Attack Flow](https://raw.githubusercontent.com/BeyondTrust/bedrock-keys-security/main/docs/images/llm-jacking.jpeg)
 
-**Privilege Escalation:** A Bedrock API key is a bearer token, so it only reaches `bedrock:*`. The IAM, KMS and EC2 reconnaissance that [`AmazonBedrockLimitedAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonBedrockLimitedAccess.html) also grants (`iam:ListRoles`, `kms:DescribeKey`, `ec2:Describe*`) is unreachable with a bearer token, since those actions require SigV4-signed requests.
+**Privilege Escalation:** A Bedrock API key is a bearer token, so it only reaches `bedrock:*` and `bedrock-mantle:*`. The IAM, KMS and EC2 reconnaissance that [`AmazonBedrockLimitedAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonBedrockLimitedAccess.html) also grants (`iam:ListRoles`, `kms:DescribeKey`, `ec2:Describe*`) is unreachable with a bearer token, since those actions require SigV4-signed requests.
 
 Creating an IAM access key on the phantom user unlocks exactly that gap: standard long-term credentials that exercise the full policy, map roles, keys and network for lateral movement, and keep working after the Bedrock API key is rotated or revoked.
 

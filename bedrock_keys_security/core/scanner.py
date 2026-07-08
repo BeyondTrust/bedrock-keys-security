@@ -30,7 +30,7 @@ class PhantomUserScanner(BasePhantomScanner):
     SERVICE_LABEL = "Bedrock"
     CREDENTIAL_COUNT_KEY = "bedrock_credentials"
     ACTIVE_CREDENTIAL_COUNT_KEY = "active_bedrock_credentials"
-    REVOKE_DENY_ACTION = "bedrock:*"
+    REVOKE_DENY_ACTION = ["bedrock:*", "bedrock-mantle:*"]
     REVOKE_DENY_SID = "DenyBedrockAPIKeyUsage"
 
     def _decode_short_term(self, key: str) -> Dict:

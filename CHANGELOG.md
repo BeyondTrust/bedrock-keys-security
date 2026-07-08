@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- `bks revoke-key` and the Bedrock SCPs now also cover the `bedrock-mantle` inference plane. A `bedrock:*`-only deny left a revoked long-term key usable on `bedrock-mantle`.
+
 ## [1.3.0] - 2026-06-30
 
 ### Added

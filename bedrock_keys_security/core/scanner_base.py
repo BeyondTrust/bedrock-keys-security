@@ -68,8 +68,9 @@ class BasePhantomScanner:
     NOTABLE_MANAGED_POLICY_ARN: Optional[str] = None
     NOTABLE_POLICY_FLAG_FIELD: Optional[str] = None
     # Long-term revoke: the inline deny attached to the phantom user. Subclasses
-    # set the service action (e.g. ``bedrock:*``) and the statement Sid.
-    REVOKE_DENY_ACTION: str = ""
+    # set the service actions (e.g. ``["bedrock:*", "bedrock-mantle:*"]``) and the
+    # statement Sid.
+    REVOKE_DENY_ACTION: List[str] = []
     REVOKE_DENY_SID: str = ""
     # Status priority used by find_phantom_users for the result sort. Subclasses
     # can override (e.g. Claude Platform omits 'AT RISK').
@@ -755,7 +756,7 @@ class BasePhantomScanner:
         if dry_run:
             if not output._quiet_mode:
                 click.echo(output.yellow(
-                    f"[DRY-RUN] Would deny {self.REVOKE_DENY_ACTION}, delete {self.SERVICE_LABEL} "
+                    f"[DRY-RUN] Would deny {', '.join(self.REVOKE_DENY_ACTION)}, delete {self.SERVICE_LABEL} "
                     f"service-specific credentials and disable IAM access keys for: {username}"
                 ))
             result["success"] = True
@@ -763,7 +764,7 @@ class BasePhantomScanner:
 
         if not force and not click.confirm(
             click.style(
-                f"This will immediately deny {self.REVOKE_DENY_ACTION}, delete {self.SERVICE_LABEL} "
+                f"This will immediately deny {', '.join(self.REVOKE_DENY_ACTION)}, delete {self.SERVICE_LABEL} "
                 f"credentials and disable IAM access keys. Continue?",
                 fg="yellow",
             ),

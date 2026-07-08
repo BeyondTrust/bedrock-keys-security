@@ -45,9 +45,10 @@ def _scanner(cls):
 
 
 _SURFACES = [
-    pytest.param(PhantomUserScanner, "bedrock:*", "DenyBedrockAPIKeyUsage",
+    pytest.param(PhantomUserScanner, ["bedrock:*", "bedrock-mantle:*"],
+                 "DenyBedrockAPIKeyUsage",
                  "bedrock", "bedrock.amazonaws.com", id="bedrock"),
-    pytest.param(ClaudePlatformPhantomScanner, "aws-external-anthropic:*",
+    pytest.param(ClaudePlatformPhantomScanner, ["aws-external-anthropic:*"],
                  "DenyClaudePlatformUsage", "claude-platform",
                  "aws-external-anthropic.amazonaws.com", id="claude-platform"),
 ]
